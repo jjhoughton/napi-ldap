@@ -1,0 +1,16 @@
+{
+  "name": "napi-ldap",
+  "version": "0.1.0",
+  "main": "main.js",
+  "private": true,
+  "gypfile": true,
+  "scripts": {
+    "start": "node-gyp configure build && node module.js",
+    "test": "node test.js"
+  },
+  "engines": {
+    "node" : ">=8.4.0"
+  },
+  "author": "Joshua Houghton <joshua.houghton@ripjar.com",
+  "license": "LGPL"
+}
