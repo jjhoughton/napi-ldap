@@ -1,15 +1,16 @@
 const exp = require(".");
 
-const e = require(".");
-const f = require(".");
-const g = require(".");
-
 console.log(exp);
 
 console.log(exp.LDAPCnx);
 
 //console.log(exp.LDAPCnx());
-
-const p = new exp.LDAPCnx();
-
+/*
+for (let i = 0; i < 1; i++) {
+  let p = new exp.LDAPCnx();
+}
+global.gc();
+setTimeout(() => {}, 1e2);
+*/
+  let p = new exp.LDAPCnx();
 console.log(p);
