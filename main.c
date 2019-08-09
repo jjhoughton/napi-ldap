@@ -2,8 +2,10 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <ldap.h>
+#include <uv.h>
 
 // NOTE: really not sure about this, it doesn't look like init is called
 // NOTE: mutliple times so i think it's safe.
@@ -15,26 +17,80 @@ struct ldap_cnx {
   LDAP *ld;
   ldap_conncb *ldap_callback;
   const char *sasl_mechanism;
+  uv_poll_t *handle;
+  // TODO: memory leak, need to clean these up
+  napi_threadsfe_function reconnect_callback, disconnect_callback, callback;
 };
 
 // TODO: bind, search, close
+
+static void
+cnx_finalise (napi_env env, void *data, void *hint)
+{
+  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)data;
+  if (ldap_cnx->ldap_callback) free (ldap_cnx->ldap_callback);
+  if (ldap_cnx->handle) free (ldap_cnx->handle);
+  free (ldap_cnx);
+}
+
+int
+on_connect(LDAP *ld, Sockbuf *sb,
+	   LDAPURLDesc *srv, struct sockaddr *addr,
+	   struct ldap_conncb *ctx)
+{
+  int fd;
+  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)ctx->lc_arg;
+  napi_status status;
+
+  if (ldap_cnx->handle == NULL)
+    {
+      ldap_cnx->handle = malloc (sizeof (uv_poll_t));
+      ldap_get_option (ld, LDAP_OPT_DESC, &fd);
+      uv_poll_init (uv_default_loop(), ldap_cnx->handle, fd);
+      ldap_cnx->handle->data = ldap_cnx;
+    }
+  else
+    {
+      uv_poll_stop (ldap_cnx->handle);
+    }
+  uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb) ldap_cnx->event);
+
+  status = napi_call_threadsafe_function (ldap_cnx->reconnect_callback,
+					  NULL, NULL);
+
+}
+
+int
+on_rebind (LDAP *ld, LDAP_CONST char *url, ber_tag_t request,
+	   ber_int_t msgid, void *params)
+{
+  // this is a new *ld representing the new server connection
+  // so our existing code won't work!
+
+  return LDAP_SUCCESS;
+}
 
 static napi_value
 cnx_constructor (napi_env env, napi_callback_info info)
 {
   napi_status status;
   bool is_instance;
-  size_t argc = 0;
+  size_t argc = 8, size;
   napi_value argv[argc];
-  napi_value _this, cnx_cons;
-  
-  status = napi_get_cb_info (env, info, &argc, argv, &_this, NULL);
+  napi_value this, cnx_cons;
+  napi_value url_v, callback, reconnect_callback, disconnect_callback;
+  napi_valuetype valuetype;
+  int32_t timeout, debug, varifycert, referrals;
+  char *url;
+  struct ldap_cnx *ldap_cnx;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
   assert (status == napi_ok);
 
   status = napi_get_reference_value (env, cnx_cons_ref, &cnx_cons);
   assert (status == napi_ok);
 
-  status = napi_instanceof (env, _this, cnx_cons, &is_instance);
+  status = napi_instanceof (env, this, cnx_cons, &is_instance);
   assert (status == napi_ok);
 
   if (!is_instance)
@@ -45,10 +101,133 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
+  if (argc != 8)
+    {
+      napi_throw_error (env, NULL, "This class requires 8 arguments");
+      return NULL;
+    }
+
+  callback = argv[0];
+  reconnect_callback = argv[1];
+  disconnect_callback = argv[2];
+  url_v = argv[3];
+
+  status = napi_typeof (env, callback, &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_function)
+    {
+      napi_throw_error (env, NULL, "Callback is not a function");
+      return NULL;
+    }
+
+  status = napi_typeof (env, reconnect_callback, &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_function)
+    {
+      napi_throw_error (env, NULL, "reconnect callback is not a function");
+      return NULL;
+    }
+
+  status = napi_typeof (env, disconnect_callback, &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_function)
+    {
+      napi_throw_error (env, NULL, "disconnect callback is not a function");
+      return NULL;
+    }
+
+  /**
+   * I'm gonna need to make threadsafe versions of these function
+   * so this is kind of superflouse
+  status = napi_set_named_property (env, this, "Callback", callback);
+  assert (status == napi_ok);
+  status = napi_set_named_property (env, this,
+				    "ReconnectCallback", reconnect_callback);
+  assert (status == napi_ok);
+  status = npai_set_named_property (env, this,
+				    "DisconnectCallback", disconnect_callback);
+  assert (status == napi_ok);
+  */
+
+  if (napi_get_value_int32 (env, argv[4], &timeout) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to parse timeout");
+      return NULL;
+    }
+
+  if (napi_get_value_int32 (env, argv[5], &debug) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to parse debug level");
+      return NULL;
+    }
+
+  if (napi_get_value_int32 (env, argv[6], &varifycert) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to parse verify cert");
+      return NULL;
+    }
+
+  if (napi_get_value_int32 (env, argv[7], &referrals) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to parse referrls");
+      return NULL;
+    }
+
+  if (napi_get_value_utf8 (env, url_v, NULL, 0, &size) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to parse url");
+      return NULL;
+    }
+  // TODO: memory leak. I'm not sure what the lifetime of this should be yet!!!
+  url = malloc (++size);
+  if (napi_get_value_utf8 (env, url_v, url, size, &size) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to parse url");
+      return NULL;
+    }
+
+  ldap_cnx = malloc (sizeof (struct ldap_cnx));
+  memset (ldap_cnx, 0, sizeof (struct ldap_cnx));
+  ldap_cnx->ldap_callback = malloc (sizeof (struct ldap_cnx));
+
+  if (ldap_initialize (&(ld->ld), *url) != LDAP_SUCCESS)
+    {
+      napi_throw_error (env, NULL, "Error intializing ldap");
+      free (url);
+      return;
+    }
+
+  status = napi_create_threadsafe_function (env, callback, NULL, NULL, 0, 1,
+					    NULL, NULL, NULL, NULL,
+					    ldap_cnx->callback);
+  assert (status == napi_ok);
+  status = napi_create_threadsafe_function (env, reconnect_callback,
+					    NULL, NULL, 0, 1,
+					    NULL, NULL, NULL, NULL,
+					    ldap_cnx->reconnect_callback);
+  assert (status == napi_ok);
+  status = napi_create_threadsafe_function (env, disconnect_callback,
+					    NULL, NULL, 0, 1,
+					    NULL, NULL, NULL, NULL,
+					    ldap_cnx->disconnect_callback);
+  assert (status == napi_ok);
+
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION,  &ver);
+  ldap_set_option (NULL,         LDAP_OPT_DEBUG_LEVEL,       &debug);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_CONNECT_CB,        ld->ldap_callback);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_NETWORK_TIMEOUT,   &ntimeout);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_REQUIRE_CERT,&verifycert);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
+
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_REFERRALS,         &referrals);
+  if (referrals)
+    ldap_set_rebind_proc(ldap_cnx->ld, on_rebind, ld);
+
+  status = napi_wrap (env, this, ldap_cnx, cnx_finalise, NULL, NULL);
+  assert (status == napi_ok);
+
   return NULL;
 }
-
-
 
 static napi_value
 init (napi_env env, napi_value exports)
