@@ -5,7 +5,7 @@
       "sources": [ "./main.c", "./cnx.c", "./cookie.c" ],
       "include_dirs": ["/usr/local/include"],
       "libraries": ["-lldap"],
-      "defines": ["LDAP_DEPRICATED"],
+      "defines": ["LDAP_DEPRECATED"],
       "ldflags": ["-L/usr/local/lib"],
       "cflags": ["-Wall"]
     }

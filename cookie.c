@@ -1,4 +1,7 @@
-#include <napi_api.h>
+#include <node_api.h>
+
+#include <stdlib.h>
+#include <assert.h>
 
 #include <ldap.h>
 
@@ -11,13 +14,14 @@ napi_ref cookie_cons_ref;
 static void
 cookie_finalise (napi_env env, void *data, void *hint)
 {
-  if (data == NULL) return;
-  if (*data == NULL)
+  struct berval **berval = (struct berval **)data;
+  if (berval == NULL) return;
+  if (*berval == NULL)
     {
-      free (data);
+      free (berval);
       return;
     }
-  ber_bvfree ((struct berval *) *data);
+  ber_bvfree (*berval);
   free (data);
 }
 
@@ -67,11 +71,12 @@ cookie_constructor (napi_env env, napi_callback_info info)
       cookie = malloc (sizeof (void *));
       *cookie = malloc (sizeof (struct berval));
       status = napi_get_value_string_utf8 (env, argv[0], NULL,
-					   0, &cookie->bv_len);
+					   0, &(*cookie)->bv_len);
       assert (status == napi_ok);
-      cookie->bv_val = malloc (cookie->bv_len + 1);
-      status = napi_get_value_string_utf8 (env, argv[0], cookie->bv_val,
-					   cookie->bv_len + 1, &cookie->bv_len);
+      (*cookie)->bv_val = malloc ((*cookie)->bv_len + 1);
+      status = napi_get_value_string_utf8 (env, argv[0], (*cookie)->bv_val,
+					   (*cookie)->bv_len + 1,
+					   &(*cookie)->bv_len);
       assert (status == napi_ok);
     }
 
@@ -85,19 +90,20 @@ static napi_value
 to_string (napi_env env, napi_callback_info info)
 {
   size_t argc = 0;
-  napi_value *argv, this, ret;
+  napi_value this, ret;
   napi_status status;
-  struct berval *cookie;
+  struct berval **cookie;
 
-  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  status = napi_get_cb_info (env, info, &argc, NULL, &this, NULL);
   assert (status == napi_ok);
 
-  status = napi_unwrap (env, this, &cookie);
+  status = napi_unwrap (env, this, (void *)&cookie);
   assert (status == napi_ok);
 
-  if (cookie == NULL) return NULL;
+  if (*cookie == NULL) return NULL;
 
-  status = napi_create_string_utf8 (env, cookie->bv_val, cookie->bv_len, &ret);
+  status = napi_create_string_utf8 (env, (*cookie)->bv_val,
+				    (*cookie)->bv_len, &ret);
   assert (status == napi_ok);
   return ret;
 }
@@ -107,14 +113,14 @@ cookie_init (napi_env env, napi_value exports)
 {
   napi_value cookie_cons;
   napi_status status;
-  napi_properties_descriptor properties[] =
+  napi_property_descriptor properties[] =
     {
-     DECLARE_NAPI_METHOD ("toString", to_string)
+     { "toString", 0, to_string, 0, 0, 0, napi_default, 0 }
     };
 
   status = napi_define_class (env, cookie_name, NAPI_AUTO_LENGTH,
 			      cookie_constructor, NULL, 0,
-			      popreties, &cookie_cons);
+			      properties, &cookie_cons);
   assert (status == napi_ok);
 
   status = napi_create_reference (env, cookie_cons, 1, &cookie_cons_ref);

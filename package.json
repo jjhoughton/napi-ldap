@@ -9,7 +9,7 @@
     "test": "node test.js"
   },
   "engines": {
-    "node" : ">=8.4.0"
+    "node": ">=8.4.0"
   },
   "author": "Joshua Houghton <joshua.houghton@ripjar.com",
   "license": "LGPL"
