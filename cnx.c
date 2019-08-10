@@ -66,14 +66,14 @@ is_binary (char *attrname)
 static void
 handle_result_events (napi_env env, napi_value js_cb,
 		      struct ldap_cnx *ldap_cnx, LDAPMessage *message,
-		      napi_value errparam)
+		      napi_value errparam, napi_value this)
 {
   int entry_count, i, j, bin;
   struct berval **vals;
   LDAPMessage *entry;
   napi_status status;
   napi_value js_result_list, js_result, js_attr_vals, js_val, result_container,
-    js_cookie_wrap, cookie_cons;
+    js_cookie_wrap, cookie_cons, js_message;
   char *dn, *attrname;
   BerElement *berptr = NULL;
   char buf[16];
@@ -176,17 +176,25 @@ handle_result_events (napi_env env, napi_value js_cb,
 	}
       ldap_controls_free (server_ctrls);
     }
+
+  status = napi_create_int32 (env, ldap_msgid (message), &js_message);
+  assert (status == napi_ok);
+  napi_value argv[] = { errparam, js_message, result_container };
+
+  status = napi_call_function (env, this, js_cb, 3, argv, NULL);
+  assert (status == napi_ok);
 }
 
 static void
 callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 {
-  char *err_str;
+  char *err_str = NULL;
   uv_poll_t *handle = (uv_poll_t *)data;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
   LDAPMessage *message;
   napi_status status;
-  napi_value errparam;
+  napi_value errparam, js_message;
+  napi_value this = (napi_value) context;
   int err, msgtype;
 
   switch (ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
@@ -204,7 +212,7 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 	if (err)
 	  {
 	    err_str = ldap_err2string (err);
-	    status = napi_create_string_utf8 (env, err_str, strlen (err_str),
+	    status = napi_create_string_utf8 (env, err_str, NAPI_AUTO_LENGTH,
 					      &errparam);
 	    assert (status == napi_ok);
 	  }
@@ -217,12 +225,34 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 	    break;
 	  case LDAP_RES_SEARCH_ENTRY:
 	  case LDAP_RES_SEARCH_RESULT:
-	    handle_result_events (env, js_cb, ldap_cnx, message, errparam);
+	    handle_result_events (env, js_cb, ldap_cnx,
+				  message, errparam, this);
 	    break;
+	  case LDAP_RES_MODIFY:
+	  case LDAP_RES_MODDN:
+	  case LDAP_RES_ADD:
+	  case LDAP_RES_DELETE:
+	  case LDAP_RES_EXTENDED:
+	    {
+	      status = napi_create_int32 (env, ldap_msgid (message),
+					  &js_message);
+	      assert (status == napi_ok);
+	      napi_value argv[] = { errparam, js_message };
+	      status = napi_call_function (env, this, js_cb, 2, argv, NULL);
+	      assert (status == napi_ok);
+	      break;
+	    }
+	  default:
+	    {
+	      //emit an error
+	      // Nan::ThrowError("Unrecognized packet");
+	    }
 	  }
       }
     }
 
+  ldap_msgfree (message);
+  return;
 }
 
 static void
@@ -423,7 +453,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
     }
 
   status = napi_create_threadsafe_function (env, callback, NULL, NULL, 0, 1,
-					    NULL, NULL, NULL,
+					    NULL, NULL, this,
 					    callback_call_js,
 					    &ldap_cnx->callback);
   assert (status == napi_ok);
