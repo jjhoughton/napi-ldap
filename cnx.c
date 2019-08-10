@@ -28,7 +28,86 @@ struct ldap_cnx {
 // shouldn't this be in ldap_cnx?
 static struct timeval ldap_tv = { 0, 0 };
 
-// TODO: bind, search, close
+// TODO: search, close
+
+static napi_value
+cnx_search (napi_env env, napi_callback_info info)
+{
+
+  return NULL;
+}
+
+static napi_value
+cnx_close (napi_env env, napi_callback_info info)
+{
+
+  return NULL;
+}
+
+static napi_value
+cnx_bind (napi_env env, napi_callback_info info)
+{
+  napi_status status;
+  size_t argc = 2, size;
+  napi_value this, argv[argc], js_ret;
+  struct ldap_cnx *ldap_cnx = NULL;
+  napi_valuetype dn_vt, pwd_vt;
+  char *dn, *password;
+  int ret;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  if (argc != 2)
+    {
+      napi_throw_error (env, NULL, "This function requires two arguments");
+      return NULL;
+    }
+
+  status = napi_typeof (env, argv[0], &dn_vt);
+  assert (status == napi_ok);
+  if (dn_vt != napi_string && dn_vt != napi_null && dn_vt != napi_undefined)
+    {
+      napi_throw_error (env, NULL, "DN must be of type string or undefined");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[1], &pwd_vt);
+  assert (status == napi_ok);
+  if (pwd_vt != napi_string && pwd_vt != napi_null && pwd_vt != napi_undefined)
+    {
+      napi_throw_error (env, NULL,
+			"password must be of type string or undefined");
+      return NULL;
+    }
+
+  if (dn_vt == napi_string)
+    {
+      status = napi_get_value_string_utf8 (env, argv[0], NULL, 0, &size);
+      assert (status == napi_ok);
+      dn = malloc (++size);
+      status = napi_get_value_string_utf8 (env, argv[0], dn, size, &size);
+      assert (status == napi_ok);
+    }
+  else dn = NULL;
+
+  if (pwd_vt == napi_string)
+    {
+      status = napi_get_value_string_utf8 (env, argv[1], NULL, 0, &size);
+      assert (status == napi_ok);
+      password = malloc (++size);
+      status = napi_get_value_string_utf8 (env, argv[1], password, size, &size);
+      assert (status == napi_ok);
+    }
+  else password = NULL;
+
+  status = napi_unwrap (env, this, (void *)ldap_cnx);
+  assert (status == napi_ok);
+
+  ret = ldap_simple_bind (ldap_cnx->ld, dn, password);
+  status = napi_create_int32 (env, ret, &js_ret);
+  assert (status == napi_ok);
+  return js_ret;
+}
 
 static void
 cnx_finalise (napi_env env, void *data, void *hint)
@@ -490,7 +569,12 @@ cnx_init (napi_env env, napi_value exports)
 {
   napi_status status;
   napi_value cnx_cons;
-  napi_property_descriptor properties[] = {};
+  napi_property_descriptor properties[] =
+    {
+     { "bind", 0, cnx_bind, 0, 0, 0, napi_default, 0 },
+     { "search", 0, cnx_search, 0, 0, 0, napi_default, 0 },
+     { "close", 0, cnx_close, 0, 0, 0, napi_default, 0 }
+    };
 
   status = napi_define_class (env, cnx_name, NAPI_AUTO_LENGTH,
 			      cnx_constructor, NULL, 0,
