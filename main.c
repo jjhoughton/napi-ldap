@@ -7,6 +7,9 @@
 #include <ldap.h>
 #include <uv.h>
 
+extern napi_ref cookie_cons_ref;
+napi_value cookie_init (napi_env env, napi_value exports);
+
 // NOTE: really not sure about this, it doesn't look like init is called
 // NOTE: mutliple times so i think it's safe.
 static napi_ref cnx_cons_ref;
@@ -36,16 +39,153 @@ cnx_finalise (napi_env env, void *data, void *hint)
   free (ldap_cnx);
 }
 
+static int
+is_binary (char *attrname)
+{
+  return (!strcmp(attrname, "jpegPhoto") ||
+	  !strcmp(attrname, "photo") ||
+	  !strcmp(attrname, "personalSignature") ||
+	  !strcmp(attrname, "userCertificate") ||
+	  !strcmp(attrname, "cACertificate") ||
+	  !strcmp(attrname, "authorityRevocationList") ||
+	  !strcmp(attrname, "certificateRevocationList") ||
+	  !strcmp(attrname, "deltaRevocationList") ||
+	  !strcmp(attrname, "crossCertificatePair") ||
+	  !strcmp(attrname, "x500UniqueIdentifier") ||
+	  !strcmp(attrname, "audio") ||
+	  !strcmp(attrname, "javaSerializedObject") ||
+	  !strcmp(attrname, "thumbnailPhoto") ||
+	  !strcmp(attrname, "thumbnailLogo") ||
+	  !strcmp(attrname, "supportedAlgorithms") ||
+	  !strcmp(attrname, "protocolInformation") ||
+	  !strcmp(attrname, "objectGUID") ||
+	  !strcmp(attrname, "objectSid") ||
+	  strstr(attrname, ";binary"));
+}
+
+static void
+handle_result_events (napi_env env, napi_value js_cb,
+		      struct ldap_cnx *ldap_cnx, LDAPMessage *message,
+		      napi_value errparam)
+{
+  char *err_str;
+  int entry_count, i, j, n, bin;
+  berval **vals;
+  LDAPMessage *entry;
+  napi_status status;
+  napi_value js_result_list, js_result, js_attr_vals, js_val, result_container,
+    js_cookie_wrap, cookie_cons;
+  char *dn, *attrname;
+  BerElement *berptr = NULL;
+  char buf[16];
+  void *data;
+  size_t size;
+  LDAPControl **server_ctrls;
+  struct berval *cookie = NULL, **cookie_wrap = NULL;
+
+
+  entry_count = ldap_count_entries (ldap_cnx->ld, message);
+  status = napi_create_array_with_length (env, entry_count, &js_result_list);
+  assert (status == napi_ok);
+  for (entry = ldap_first_entry (ldap_cnx->ld, message), i = 0;
+       entry;
+       entry = ldap_next_entry (ldap_cnx->ld, entry), i++)
+    {
+      status = napi_create_object (env, &js_result);
+      assert (status == napi_ok);
+
+      ssprintf (buf, "%d", i);
+      status = napi_set_named_property (env, js_result, buf, &js_result_list);
+      assert (status == napi_ok);
+
+      dn = ldap_get_dn (ldap_cnx->ld, entry);
+      for (attrname = ldap_first_attribute (ldap_cnx->ld, entry, &berptr);
+	   attrname;
+	   attrname = ldap_next_attribute (ldap_cnx->ld, entry, berptr))
+	{
+	  vals = ldap_get_values_len(ldap_cnx->ld, entry, attrname);
+	  num_vals = ldap_count_values_len (vals);
+	  status = napi_create_array_with_length (env, num_vals, &js_attr_vals);
+	  assert (status == napi_ok);
+	  status = napi_set_named_property (env, js_result,
+					    attrname, js_attr_vals);
+	  assert (status == napi_ok);
+	  bin = is_binary (attrname);
+
+	  for (int j = 0; j < num_vals; j++)
+	    {
+	      ssprintf (buf, "%d", j);
+	      size = vals[j]->bv_len;
+	      if (bin)
+		{
+		  status = napi_create_buffer (env, size, &data, &js_val);
+		  assert (status == napi_ok);
+		  memcpy (data, vals[j]->bv_val, size);
+		}
+	      else
+		{
+		  status = napi_create_string_utf8 (env, vals[j]->val, size,
+						    &js_val);
+		  assert (status == napi_ok);
+		}
+	      status = napi_set_named_property (env, js_attr_vals, buf, js_val);
+	      assert (status == napi_ok);
+	    }
+	  ldap_value_free_len (vals);
+	  ldap_memfree (attrname);
+	}
+      status = napi_create_string_utf8 (env, dn, strlen (dn), &js_val);
+      assert (status == napi_ok);
+      status = napi_set_named_property (env, js_result, "dn", js_val);
+      assert (status == napi_ok);
+    }
+
+  status = napi_create_object (env, &result_container);
+  assert (status == napi_ok);
+  status = napi_set_named_property (env, result_container, "data",
+				    js_result_list);
+  assert (status == napi_ok);
+
+  ldap_parse_result (ldap_cnx->ld, message,
+		     NULL, // int* errcodep
+		     NULL, // char** matcheddnp
+		     NULL, // char** errmsp
+		     NULL, // char*** referralsp
+		     &serverCtrls,
+		     0     // freeit
+		     );
+  if (server_ctrls)
+    {
+      ldap_parse_page_control (ldap_cnx->ld, server_ctrls, NULL, &cookie);
+      if (!cookie || cookie->bv_val == NULL || !*cooie->bv_val)
+	{
+	  if (cooie)
+	    ber_bvfree (cookie);
+	}
+      else
+	{
+	  status = napi_create_object (env, &js_cookie_wap);
+	  assert (status == napi_ok);
+	  status = napi_get_reference_value (env, cookie_cons_ref,
+					     &cookie_cons);
+	  assert (status == napi_ok);
+	  status = napi_new_instance (env, cookie_cons, 0, NULL,
+				      js_cookie_wrap);
+	  status = napi_unwrap (env, js_cookie_wrap, &cookie_wrap);
+	  assert (status == napi_ok);
+	  *cookie_wrap = cookie;
+	}
+    }
+}
+
 static void
 callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 {
   uv_poll_t *handle = (uv_poll_t *)data;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
-  LDAPMessage *message, *entry;
+  LDAPMessage *message;
   napi_status status;
-  napi_value errparam, js_result_list;
-  char *err_str;
-  int entry_count;
+  int err;
 
   switch (ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
 		       &ldap_tv, &message))
@@ -57,7 +197,7 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
       break;
     default:
       {
-	int err = ldap_result2error (ld->ld, message, 0);
+	err = ldap_result2error (ld->ld, message, 0);
 	// TODO: memory leak, might need to free up errparam
 	if (err)
 	  {
@@ -68,16 +208,15 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 	  }
 	else
 	  errparam = NULL;
+
 	switch (msgtype = ldap_msgtype (message))
 	  {
 	  case LDAP_RES_SEARCH_REFERENCE:
 	    break;
 	  case LDAP_RES_SEARCH_ENTRY:
 	  case LDAP_RES_SEARCH_RESULT:
-	    {
-	      entry_count = ldap_count_entries (ldap_cnx->ld, message);
-	      
-	    }
+	    handle_result_events (env, js_cb, ldap_cnx, message);
+	    break;
 	  }
       }
     }
@@ -289,8 +428,8 @@ cnx_constructor (napi_env env, napi_callback_info info)
   return NULL;
 }
 
-static napi_value
-init (napi_env env, napi_value exports)
+static void
+cnx_init (napi_env env, napi_value exports)
 {
   napi_status status;
   napi_value cnx_cons;
@@ -306,6 +445,12 @@ init (napi_env env, napi_value exports)
 
   status =napi_set_named_property (env, exports, cnx_name, cnx_cons);
   assert (status == napi_ok);
+}
+
+static napi_value
+init (napi_env env, napi_value exports)
+{
+  cnx_init (env, exports);
 
   return exports;
 }
