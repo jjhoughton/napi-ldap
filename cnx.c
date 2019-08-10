@@ -22,7 +22,7 @@ struct ldap_cnx {
   const char *sasl_mechanism;
   uv_poll_t *handle;
   // TODO: memory leak, need to clean these up
-  napi_threadsfe_function reconnect_callback, disconnect_callback, callback;
+  napi_threadsafe_function reconnect_callback, disconnect_callback, callback;
 };
 
 // shouldn't this be in ldap_cnx?
@@ -68,9 +68,8 @@ handle_result_events (napi_env env, napi_value js_cb,
 		      struct ldap_cnx *ldap_cnx, LDAPMessage *message,
 		      napi_value errparam)
 {
-  char *err_str;
-  int entry_count, i, j, n, bin;
-  berval **vals;
+  int entry_count, i, j, bin;
+  struct berval **vals;
   LDAPMessage *entry;
   napi_status status;
   napi_value js_result_list, js_result, js_attr_vals, js_val, result_container,
@@ -80,9 +79,9 @@ handle_result_events (napi_env env, napi_value js_cb,
   char buf[16];
   void *data;
   size_t size;
+  int num_vals;
   LDAPControl **server_ctrls;
   struct berval *cookie = NULL, **cookie_wrap = NULL;
-
 
   entry_count = ldap_count_entries (ldap_cnx->ld, message);
   status = napi_create_array_with_length (env, entry_count, &js_result_list);
@@ -94,8 +93,8 @@ handle_result_events (napi_env env, napi_value js_cb,
       status = napi_create_object (env, &js_result);
       assert (status == napi_ok);
 
-      ssprintf (buf, "%d", i);
-      status = napi_set_named_property (env, js_result, buf, &js_result_list);
+      sprintf (buf, "%d", i);
+      status = napi_set_named_property (env, js_result, buf, js_result_list);
       assert (status == napi_ok);
 
       dn = ldap_get_dn (ldap_cnx->ld, entry);
@@ -112,9 +111,9 @@ handle_result_events (napi_env env, napi_value js_cb,
 	  assert (status == napi_ok);
 	  bin = is_binary (attrname);
 
-	  for (int j = 0; j < num_vals; j++)
+	  for (j = 0; j < num_vals; j++)
 	    {
-	      ssprintf (buf, "%d", j);
+	      sprintf (buf, "%d", j);
 	      size = vals[j]->bv_len;
 	      if (bin)
 		{
@@ -124,7 +123,7 @@ handle_result_events (napi_env env, napi_value js_cb,
 		}
 	      else
 		{
-		  status = napi_create_string_utf8 (env, vals[j]->val, size,
+		  status = napi_create_string_utf8 (env, vals[j]->bv_val, size,
 						    &js_val);
 		  assert (status == napi_ok);
 		}
@@ -157,21 +156,21 @@ handle_result_events (napi_env env, napi_value js_cb,
   if (server_ctrls)
     {
       ldap_parse_page_control (ldap_cnx->ld, server_ctrls, NULL, &cookie);
-      if (!cookie || cookie->bv_val == NULL || !*cooie->bv_val)
+      if (!cookie || cookie->bv_val == NULL || !*cookie->bv_val)
 	{
-	  if (cooie)
+	  if (cookie)
 	    ber_bvfree (cookie);
 	}
       else
 	{
-	  status = napi_create_object (env, &js_cookie_wap);
+	  status = napi_create_object (env, &js_cookie_wrap);
 	  assert (status == napi_ok);
 	  status = napi_get_reference_value (env, cookie_cons_ref,
 					     &cookie_cons);
 	  assert (status == napi_ok);
 	  status = napi_new_instance (env, cookie_cons, 0, NULL,
-				      js_cookie_wrap);
-	  status = napi_unwrap (env, js_cookie_wrap, &cookie_wrap);
+				      &js_cookie_wrap);
+	  status = napi_unwrap (env, js_cookie_wrap, (void *)&cookie_wrap);
 	  assert (status == napi_ok);
 	  *cookie_wrap = cookie;
 	}
@@ -182,11 +181,13 @@ handle_result_events (napi_env env, napi_value js_cb,
 static void
 callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 {
+  char *err_str;
   uv_poll_t *handle = (uv_poll_t *)data;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
   LDAPMessage *message;
   napi_status status;
-  int err;
+  napi_value errparam;
+  int err, msgtype;
 
   switch (ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
 		       &ldap_tv, &message))
@@ -198,13 +199,13 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
       break;
     default:
       {
-	err = ldap_result2error (ld->ld, message, 0);
+	err = ldap_result2error (ldap_cnx->ld, message, 0);
 	// TODO: memory leak, might need to free up errparam
 	if (err)
 	  {
 	    err_str = ldap_err2string (err);
 	    status = napi_create_string_utf8 (env, err_str, strlen (err_str),
-					      &errpararm);
+					      &errparam);
 	    assert (status == napi_ok);
 	  }
 	else
@@ -216,7 +217,7 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 	    break;
 	  case LDAP_RES_SEARCH_ENTRY:
 	  case LDAP_RES_SEARCH_RESULT:
-	    handle_result_events (env, js_cb, ldap_cnx, message);
+	    handle_result_events (env, js_cb, ldap_cnx, message, errparam);
 	    break;
 	  }
       }
@@ -225,10 +226,13 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 }
 
 static void
-event (uv_poll_t* handle, int status, int events)
+event (uv_poll_t* handle, int _status, int events)
 {
+  napi_status status;
+  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
   status = napi_call_threadsafe_function (ldap_cnx->callback, handle,
 					  napi_tsfn_blocking);
+  assert (status == napi_ok);
 }
 
 static int
@@ -254,9 +258,23 @@ on_connect(LDAP *ld, Sockbuf *sb,
   uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb)event);
 
   status = napi_call_threadsafe_function (ldap_cnx->reconnect_callback,
-					  NULL, NULL);
+					  NULL, napi_tsfn_blocking);
+  assert (status == napi_ok);
 
-  return LDAP_SUCESS;
+  return LDAP_SUCCESS;
+}
+
+static void
+on_disconnect (LDAP *ld, Sockbuf *sb,
+	       struct ldap_conncb *ctx)
+{
+  struct ldap_cnx *lc = (struct ldap_cnx *)ctx->lc_arg;
+  napi_status status;
+
+  if (lc->handle) uv_poll_stop (lc->handle);
+  status = napi_call_threadsafe_function(lc->disconnect_callback,
+					 NULL, napi_tsfn_blocking);
+  assert (status == napi_ok);
 }
 
 static int
@@ -279,9 +297,12 @@ cnx_constructor (napi_env env, napi_callback_info info)
   napi_value this, cnx_cons;
   napi_value url_v, callback, reconnect_callback, disconnect_callback;
   napi_valuetype valuetype;
-  int32_t timeout, debug, varifycert, referrals;
+  int32_t timeout, debug, verifycert, referrals;
   char *url;
   struct ldap_cnx *ldap_cnx;
+  int ver = LDAP_VERSION3;
+  struct timeval ntimeout;
+  int zero = 0;
 
   status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
   assert (status == napi_ok);
@@ -353,6 +374,8 @@ cnx_constructor (napi_env env, napi_callback_info info)
       napi_throw_error (env, NULL, "Failed to parse timeout");
       return NULL;
     }
+  ntimeout.tv_sec = timeout/1000;
+  ntimeout.tv_usec = (timeout%1000) * 1000;
 
   if (napi_get_value_int32 (env, argv[5], &debug) != napi_ok)
     {
@@ -360,7 +383,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  if (napi_get_value_int32 (env, argv[6], &varifycert) != napi_ok)
+  if (napi_get_value_int32 (env, argv[6], &verifycert) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse verify cert");
       return NULL;
@@ -372,14 +395,14 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  if (napi_get_value_utf8 (env, url_v, NULL, 0, &size) != napi_ok)
+  if (napi_get_value_string_utf8 (env, url_v, NULL, 0, &size) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
     }
   // TODO: memory leak. I'm not sure what the lifetime of this should be yet!!!
   url = malloc (++size);
-  if (napi_get_value_utf8 (env, url_v, url, size, &size) != napi_ok)
+  if (napi_get_value_string_utf8 (env, url_v, url, size, &size) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
@@ -387,29 +410,32 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   ldap_cnx = malloc (sizeof (struct ldap_cnx));
   memset (ldap_cnx, 0, sizeof (struct ldap_cnx));
-  ldap_cnx->ldap_callback = malloc (sizeof (struct ldap_cnx));
+  ldap_cnx->ldap_callback = malloc (sizeof (struct ldap_conncb));
+  ldap_cnx->ldap_callback->lc_add = on_connect;
+  ldap_cnx->ldap_callback->lc_del = on_disconnect;
+  ldap_cnx->ldap_callback->lc_arg = ldap_cnx;
 
-  if (ldap_initialize (&(ld->ld), *url) != LDAP_SUCCESS)
+  if (ldap_initialize (&(ldap_cnx->ld), url) != LDAP_SUCCESS)
     {
       napi_throw_error (env, NULL, "Error intializing ldap");
       free (url);
-      return;
+      return NULL;
     }
 
   status = napi_create_threadsafe_function (env, callback, NULL, NULL, 0, 1,
 					    NULL, NULL, NULL,
 					    callback_call_js,
-					    ldap_cnx->callback);
+					    &ldap_cnx->callback);
   assert (status == napi_ok);
   status = napi_create_threadsafe_function (env, reconnect_callback,
 					    NULL, NULL, 0, 1,
 					    NULL, NULL, NULL, NULL,
-					    ldap_cnx->reconnect_callback);
+					    &ldap_cnx->reconnect_callback);
   assert (status == napi_ok);
   status = napi_create_threadsafe_function (env, disconnect_callback,
 					    NULL, NULL, 0, 1,
 					    NULL, NULL, NULL, NULL,
-					    ldap_cnx->disconnect_callback);
+					    &ldap_cnx->disconnect_callback);
   assert (status == napi_ok);
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION,  &ver);
@@ -421,7 +447,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_REFERRALS,         &referrals);
   if (referrals)
-    ldap_set_rebind_proc(ldap_cnx->ld, on_rebind, ld);
+    ldap_set_rebind_proc (ldap_cnx->ld, on_rebind, ldap_cnx);
 
   status = napi_wrap (env, this, ldap_cnx, cnx_finalise, NULL, NULL);
   assert (status == napi_ok);
