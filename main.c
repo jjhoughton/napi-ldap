@@ -22,6 +22,9 @@ struct ldap_cnx {
   napi_threadsfe_function reconnect_callback, disconnect_callback, callback;
 };
 
+// shouldn't this be in ldap_cnx?
+static struct timeval ldap_tv = { 0, 0 };
+
 // TODO: bind, search, close
 
 static void
@@ -33,7 +36,62 @@ cnx_finalise (napi_env env, void *data, void *hint)
   free (ldap_cnx);
 }
 
-int
+static void
+callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
+{
+  uv_poll_t *handle = (uv_poll_t *)data;
+  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
+  LDAPMessage *message, *entry;
+  napi_status status;
+  napi_value errparam, js_result_list;
+  char *err_str;
+  int entry_count;
+
+  switch (ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
+		       &ldap_tv, &message))
+    {
+    case 0:
+      // timeout occurred, which I don't think happens in async mode
+    case -1:
+      // We can't really do much; we don't have a msgid to callback to
+      break;
+    default:
+      {
+	int err = ldap_result2error (ld->ld, message, 0);
+	// TODO: memory leak, might need to free up errparam
+	if (err)
+	  {
+	    err_str = ldap_err2string (err);
+	    status = napi_create_string_utf8 (env, err_str, strlen (err_str),
+					      &errpararm);
+	    assert (status == napi_ok);
+	  }
+	else
+	  errparam = NULL;
+	switch (msgtype = ldap_msgtype (message))
+	  {
+	  case LDAP_RES_SEARCH_REFERENCE:
+	    break;
+	  case LDAP_RES_SEARCH_ENTRY:
+	  case LDAP_RES_SEARCH_RESULT:
+	    {
+	      entry_count = ldap_count_entries (ldap_cnx->ld, message);
+	      
+	    }
+	  }
+      }
+    }
+
+}
+
+static void
+event (uv_poll_t* handle, int status, int events)
+{
+  status = napi_call_threadsafe_function (ldap_cnx->callback, handle,
+					  napi_tsfn_blocking);
+}
+
+static int
 on_connect(LDAP *ld, Sockbuf *sb,
 	   LDAPURLDesc *srv, struct sockaddr *addr,
 	   struct ldap_conncb *ctx)
@@ -53,14 +111,15 @@ on_connect(LDAP *ld, Sockbuf *sb,
     {
       uv_poll_stop (ldap_cnx->handle);
     }
-  uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb) ldap_cnx->event);
+  uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb)event);
 
   status = napi_call_threadsafe_function (ldap_cnx->reconnect_callback,
 					  NULL, NULL);
 
+  return LDAP_SUCESS;
 }
 
-int
+static int
 on_rebind (LDAP *ld, LDAP_CONST char *url, ber_tag_t request,
 	   ber_int_t msgid, void *params)
 {
@@ -198,7 +257,8 @@ cnx_constructor (napi_env env, napi_callback_info info)
     }
 
   status = napi_create_threadsafe_function (env, callback, NULL, NULL, 0, 1,
-					    NULL, NULL, NULL, NULL,
+					    NULL, NULL, NULL,
+					    callback_call_js,
 					    ldap_cnx->callback);
   assert (status == napi_ok);
   status = napi_create_threadsafe_function (env, reconnect_callback,
@@ -214,7 +274,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION,  &ver);
   ldap_set_option (NULL,         LDAP_OPT_DEBUG_LEVEL,       &debug);
-  ldap_set_option (ldap_cnx->ld, LDAP_OPT_CONNECT_CB,        ld->ldap_callback);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_CONNECT_CB,  ldap_cnx->ldap_callback);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_NETWORK_TIMEOUT,   &ntimeout);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_REQUIRE_CERT,&verifycert);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
