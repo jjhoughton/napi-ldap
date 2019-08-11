@@ -28,8 +28,6 @@ struct ldap_cnx {
 // shouldn't this be in ldap_cnx?
 static struct timeval ldap_tv = { 0, 0 };
 
-// TODO: search, close
-
 static napi_value
 cnx_search (napi_env env, napi_callback_info info)
 {
@@ -40,8 +38,23 @@ cnx_search (napi_env env, napi_callback_info info)
 static napi_value
 cnx_close (napi_env env, napi_callback_info info)
 {
+  napi_status status;
+  napi_value this, js_ret;
+  size_t argc = 0;
+  int ret;
+  struct ldap_cnx *ldap_cnx;
 
-  return NULL;
+  status = napi_get_cb_info (env, info, &argc, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **)&ldap_cnx);
+  assert (status == napi_ok);
+
+  ret = ldap_unbind (ldap_cnx->ld);
+  status = napi_create_int32 (env, ret, &js_ret);
+  assert (status == napi_ok);
+
+  return js_ret;
 }
 
 static napi_value
@@ -68,7 +81,8 @@ cnx_bind (napi_env env, napi_callback_info info)
   assert (status == napi_ok);
   if (dn_vt != napi_string && dn_vt != napi_null && dn_vt != napi_undefined)
     {
-      napi_throw_error (env, NULL, "DN must be of type string or undefined");
+      napi_throw_error (env, NULL,
+			"DN must be of type string or undefined/null");
       return NULL;
     }
   status = napi_typeof (env, argv[1], &pwd_vt);
@@ -76,7 +90,7 @@ cnx_bind (napi_env env, napi_callback_info info)
   if (pwd_vt != napi_string && pwd_vt != napi_null && pwd_vt != napi_undefined)
     {
       napi_throw_error (env, NULL,
-			"password must be of type string or undefined");
+			"password must be of type string or undefined/null");
       return NULL;
     }
 
@@ -100,7 +114,7 @@ cnx_bind (napi_env env, napi_callback_info info)
     }
   else password = NULL;
 
-  status = napi_unwrap (env, this, (void *)ldap_cnx);
+  status = napi_unwrap (env, this, (void **)&ldap_cnx);
   assert (status == napi_ok);
 
   ret = ldap_simple_bind (ldap_cnx->ld, dn, password);
@@ -249,7 +263,7 @@ handle_result_events (napi_env env, napi_value js_cb,
 	  assert (status == napi_ok);
 	  status = napi_new_instance (env, cookie_cons, 0, NULL,
 				      &js_cookie_wrap);
-	  status = napi_unwrap (env, js_cookie_wrap, (void *)&cookie_wrap);
+	  status = napi_unwrap (env, js_cookie_wrap, (void **)&cookie_wrap);
 	  assert (status == napi_ok);
 	  *cookie_wrap = cookie;
 	}
