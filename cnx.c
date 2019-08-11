@@ -31,6 +31,84 @@ static struct timeval ldap_tv = { 0, 0 };
 static napi_value
 cnx_search (napi_env env, napi_callback_info info)
 {
+  napi_status status;
+  size_t argc = 6;
+  napi_value this, argv[argc], cookie_cons;
+  napi_valuetype valuetype;
+  struct ldap_cnx *ldap_cnx;
+  bool is_instance;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **)&ldap_cnx);
+  assert (status == napi_ok);
+
+  if (argc != 6)
+    {
+      napi_throw_error (env, NULL, "This function requires six arguments");
+      return NULL;
+    }
+  
+  status = napi_typeof (env, argv[0], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "base needs to be of type string");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[1], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "filter needs to be of type string");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[2], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "attrs must be of type string");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[3], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_number)
+    {
+      napi_throw_error (env, NULL, "scope must be of type number");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[4], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_number)
+    {
+      napi_throw_error (env, NULL, "pagesize must of type number");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[5], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_null ||
+      valuetype != napi_undefined ||
+      valuetype != napi_object)
+    {
+      napi_throw_error (env, NULL,
+			"Cookie either needs to be an instance of "
+			"a cookie or null/undefined");
+      return NULL;
+    }
+
+  status = napi_get_reference_value (env, cookie_cons_ref, &cookie_cons);
+  assert (status == napi_ok);
+  status = napi_instanceof (env, argv[5], cookie_cons, &is_instance);
+  assert (status == napi_ok);
+
+  if (!is_instance)
+    {
+      napi_throw_error (env, NULL, "Cookie is not an instance of a Cookie");
+      return NULL;
+    }
+
+  LDAPControl *page_control[2];
 
   return NULL;
 }
@@ -349,7 +427,7 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 }
 
 static void
-event (uv_poll_t* handle, int _status, int events)
+cnx_event (uv_poll_t* handle, int _status, int events)
 {
   napi_status status;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
@@ -378,7 +456,7 @@ on_connect(LDAP *ld, Sockbuf *sb,
     {
       uv_poll_stop (ldap_cnx->handle);
     }
-  uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb)event);
+  uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb)cnx_event);
 
   status = napi_call_threadsafe_function (ldap_cnx->reconnect_callback,
 					  NULL, napi_tsfn_blocking);
@@ -523,7 +601,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
     }
-  // TODO: memory leak. I'm not sure what the lifetime of this should be yet!!!
   url = malloc (++size);
   if (napi_get_value_string_utf8 (env, url_v, url, size, &size) != napi_ok)
     {
@@ -574,6 +651,8 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   status = napi_wrap (env, this, ldap_cnx, cnx_finalise, NULL, NULL);
   assert (status == napi_ok);
+
+  free (url);
 
   return NULL;
 }
