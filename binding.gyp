@@ -7,7 +7,7 @@
       "libraries": ["-lldap"],
       "defines": ["LDAP_DEPRECATED"],
       "ldflags": ["-L/usr/local/lib"],
-      "cflags": ["-Wall"]
+      "cflags": ["-Wall", "-Wextra"]
     }
   ]
 }
