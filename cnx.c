@@ -33,10 +33,16 @@ cnx_search (napi_env env, napi_callback_info info)
 {
   napi_status status;
   size_t argc = 6;
-  napi_value this, argv[argc], cookie_cons;
+  napi_value this, argv[argc], cookie_cons, msgid_js;
   napi_valuetype valuetype;
   struct ldap_cnx *ldap_cnx;
   bool is_instance;
+  LDAPControl *page_control[2];
+  struct berval **cookie_wrap, *cookie;
+  char *base, *filter, *attrs;
+  char *attrlist[255], *buf, **ap;
+  int scope, pagesize, msgid = 0;
+  size_t size;
 
   status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
   assert (status == napi_ok);
@@ -97,20 +103,78 @@ cnx_search (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  status = napi_get_reference_value (env, cookie_cons_ref, &cookie_cons);
+  if (valuetype == napi_object)
+    {
+      status = napi_get_reference_value (env, cookie_cons_ref, &cookie_cons);
+      assert (status == napi_ok);
+      status = napi_instanceof (env, argv[5], cookie_cons, &is_instance);
+      assert (status == napi_ok);
+
+      if (!is_instance)
+        {
+          napi_throw_error (env, NULL, "Cookie is not an instance of a Cookie");
+          return NULL;
+        }
+
+      status = napi_unwrap (env, argv[5], (void **)&cookie_wrap);
+      assert (status == napi_ok);
+      cookie = *cookie_wrap;
+    }
+  else cookie = NULL;
+
+  status = napi_get_value_string_utf8 (env, argv[0], NULL, 0, &size);
   assert (status == napi_ok);
-  status = napi_instanceof (env, argv[5], cookie_cons, &is_instance);
+  base = malloc (++size);
+  status = napi_get_value_string_utf8 (env, argv[0], base, size, &size);
   assert (status == napi_ok);
 
-  if (!is_instance)
+  status = napi_get_value_string_utf8 (env, argv[1], NULL, 0, &size);
+  assert (status == napi_ok);
+  filter = malloc (++size);
+  status = napi_get_value_string_utf8 (env, argv[1], filter, size, &size);
+  assert (status == napi_ok);
+
+  status = napi_get_value_string_utf8 (env, argv[2], NULL, 0, &size);
+  assert (status == napi_ok);
+  attrs = malloc (++size);
+  status = napi_get_value_string_utf8 (env, argv[2], attrs, size, &size);
+
+  status = napi_get_value_int32 (env, argv[3], &scope);
+  assert (status == napi_ok);
+
+  status = napi_get_value_int32 (env, argv[4], &pagesize);
+  assert (status == napi_ok);
+
+  memset (&page_control, 0, sizeof (page_control));
+
+  for (ap = attrlist; (*ap = strsep (&buf, " \t,")) != NULL;)
+    if (**ap != '\0')
+      if (++ap >= &attrlist[266])
+        break;
+
+  if (pagesize > 0)
     {
-      napi_throw_error (env, NULL, "Cookie is not an instance of a Cookie");
-      return NULL;
+      if (cookie)
+        ldap_create_page_control (ldap_cnx->ld, pagesize,
+                                  cookie, 0, &page_control[0]);
+      else
+        ldap_create_page_control (ldap_cnx->ld, pagesize,
+                                  NULL, 0, &page_control[0]);
     }
 
-  LDAPControl *page_control[2];
+  ldap_search_ext (ldap_cnx->ld, base, scope, filter, (char **)attrlist, 0,
+                   page_control, NULL, NULL, 0, &msgid);
+  if (pagesize > 0)
+    ldap_control_free (page_control[0]);
 
-  return NULL;
+  free (base);
+  free (filter);
+  free (attrs);
+
+  status = napi_create_int32 (env, msgid, &msgid_js);
+  assert (status == napi_ok);
+
+  return msgid_js;
 }
 
 static napi_value
