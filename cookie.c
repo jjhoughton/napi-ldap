@@ -26,6 +26,52 @@ cookie_finalise (napi_env env, void *data, void *hint)
 }
 
 static napi_value
+set_from_string (napi_env env, napi_callback_info info)
+{
+  napi_status status;
+  size_t argc = 1;
+  napi_value arg, this;
+  napi_valuetype valuetype;
+  struct berval **cookie;
+
+  status = napi_get_cb_info (env, info, &argc, &arg, &this, NULL);
+  assert (status == napi_ok);
+
+  if (argc < 1)
+    {
+      napi_throw_error (env, NULL, "This function requires one argument");
+      return NULL;
+    }
+
+  status = napi_typeof (env, arg, &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "Argument has to be of type string");
+      return NULL;
+    }
+
+  status = napi_unwrap (env, arg, (void **)&cookie);
+  assert (status == napi_ok);
+
+  if (*cookie == NULL)
+    *cookie = malloc (sizeof (struct berval));
+  else
+    free ((*cookie)->bv_val);
+
+  status = napi_get_value_string_utf8 (env, arg, NULL,
+                                       0, &(*cookie)->bv_len);
+  assert (status == napi_ok);
+  (*cookie)->bv_val = malloc ((*cookie)->bv_len + 1);
+  status = napi_get_value_string_utf8 (env, arg, (*cookie)->bv_val,
+                                       (*cookie)->bv_len + 1,
+                                       &(*cookie)->bv_len);
+  assert (status == napi_ok);
+
+  return this;
+}
+
+static napi_value
 cookie_constructor (napi_env env, napi_callback_info info)
 {
   napi_status status;
@@ -68,20 +114,16 @@ cookie_constructor (napi_env env, napi_callback_info info)
 	  napi_throw_error (env, NULL, "Argument has to be of type string");
 	  return NULL;
 	}
-      cookie = malloc (sizeof (void *));
-      *cookie = malloc (sizeof (struct berval));
-      status = napi_get_value_string_utf8 (env, argv[0], NULL,
-					   0, &(*cookie)->bv_len);
-      assert (status == napi_ok);
-      (*cookie)->bv_val = malloc ((*cookie)->bv_len + 1);
-      status = napi_get_value_string_utf8 (env, argv[0], (*cookie)->bv_val,
-					   (*cookie)->bv_len + 1,
-					   &(*cookie)->bv_len);
-      assert (status == napi_ok);
     }
+
+  cookie = malloc (sizeof (void *));
+  *cookie = NULL;
 
   status = napi_wrap (env, this, cookie, cookie_finalise, NULL, NULL);
   assert (status == napi_ok);
+
+  if (argc == 1)
+    set_from_string (env, info);
 
   return NULL;
 }
@@ -97,7 +139,7 @@ to_string (napi_env env, napi_callback_info info)
   status = napi_get_cb_info (env, info, &argc, NULL, &this, NULL);
   assert (status == napi_ok);
 
-  status = napi_unwrap (env, this, (void *)&cookie);
+  status = napi_unwrap (env, this, (void **)&cookie);
   assert (status == napi_ok);
 
   if (*cookie == NULL) return NULL;
@@ -115,7 +157,8 @@ cookie_init (napi_env env, napi_value exports)
   napi_status status;
   napi_property_descriptor properties[] =
     {
-     { "toString", 0, to_string, 0, 0, 0, napi_default, 0 }
+     { "toString", 0, to_string, 0, 0, 0, napi_default, 0 },
+     { "setFromString", 0, set_from_string, 0, 0, 0, napi_default, 0 }
     };
 
   status = napi_define_class (env, cookie_name, NAPI_AUTO_LENGTH,
