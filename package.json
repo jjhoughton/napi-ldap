@@ -12,5 +12,5 @@
     "node": ">=8.4.0"
   },
   "author": "Joshua Houghton <joshua.houghton@ripjar.com",
-  "license": "LGPL"
+  "license": "MIT"
 }
