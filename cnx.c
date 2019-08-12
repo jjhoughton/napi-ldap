@@ -8,7 +8,6 @@
 #include <uv.h>
 
 extern napi_ref cookie_cons_ref;
-napi_value cookie_init (napi_env env, napi_value exports);
 
 // NOTE: really not sure about this, it doesn't look like init is called
 // NOTE: mutliple times so i think it's safe.
