@@ -429,7 +429,7 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
   napi_status status;
   napi_value errparam, js_message;
   napi_value this = (napi_value) context;
-  int err, msgtype, res;
+  int err, msgtype, res, msgid;
 
   res = ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
                      &ldap_tv, &message);
@@ -461,6 +461,22 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
       handle_result_events (env, js_cb, ldap_cnx,
                             message, errparam, this);
       break;
+    case LDAP_RES_BIND:
+      {
+        msgid = ldap_msgid (message);
+
+        if (err == LDAP_SASL_BIND_IN_PROGRESS)
+          {
+            // TODO: we don't support sasl yet
+          }
+
+        status = napi_create_int32 (env, msgid, &js_message);
+        assert (status == napi_ok);
+        napi_value argv[] = { errparam, js_message };
+        status = napi_call_function (env, this, js_cb, 3, argv, NULL);
+        assert (status == napi_ok);
+        break;
+      }
     case LDAP_RES_MODIFY:
     case LDAP_RES_MODDN:
     case LDAP_RES_ADD:
@@ -562,7 +578,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
   char *url;
   struct ldap_cnx *ldap_cnx;
   int ver = LDAP_VERSION3;
-  struct timeval ntimeout;
   int zero = 0;
   napi_extended_error_info *errinfo;
 
@@ -638,8 +653,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
       napi_throw_error (env, NULL, "Failed to parse timeout");
       return NULL;
     }
-  ntimeout.tv_sec = timeout/1000;
-  ntimeout.tv_usec = (timeout%1000) * 1000;
 
   if (napi_get_value_int32 (env, argv[5], &debug) != napi_ok)
     {
@@ -669,7 +682,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
     {
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
-    }
+   }
 
   ldap_cnx = malloc (sizeof (struct ldap_cnx));
   memset (ldap_cnx, 0, sizeof (struct ldap_cnx));
@@ -713,6 +726,8 @@ cnx_constructor (napi_env env, napi_callback_info info)
 					    NULL, NULL, NULL, NULL,
 					    &ldap_cnx->disconnect_callback);
   assert (status == napi_ok);
+
+  struct timeval ntimeout = { timeout/1000, (timeout%1000) * 1000 };
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION,  &ver);
   ldap_set_option (NULL,         LDAP_OPT_DEBUG_LEVEL,       &debug);
