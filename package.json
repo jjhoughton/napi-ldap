@@ -8,6 +8,21 @@
     "start": "node-gyp configure build && node module.js",
     "test": "node test.js"
   },
+  "scripts": {
+    "configure": "node-gyp configure",
+    "build": "node-gyp rebuild",
+    "test": "mocha"
+  },
+  "devDependencies": {
+    "jshint": "^2.8.0",
+    "mocha": "^3.5.3"
+  },
+  "dependencies": {
+    "bindings": "^1.2.1",
+    "lodash": "^3.10.1",
+    "nan": "^2.0.5",
+    "node-gyp": ""
+  },
   "engines": {
     "node": ">=8.4.0"
   },
