@@ -1,0 +1,1 @@
+/usr/sbin/slapd -d999 -f slapd.conf -h ldap://:1234 ldapi://%2ftmp%2fslapd.sock ldaps://localhost:1235 
