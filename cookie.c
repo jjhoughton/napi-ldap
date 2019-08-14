@@ -162,7 +162,7 @@ cookie_init (napi_env env, napi_value exports)
     };
 
   status = napi_define_class (env, cookie_name, NAPI_AUTO_LENGTH,
-			      cookie_constructor, NULL, 0,
+			      cookie_constructor, NULL, 2,
 			      properties, &cookie_cons);
   assert (status == napi_ok);
 
