@@ -15,7 +15,8 @@ static napi_ref cnx_cons_ref;
 
 static const char cnx_name[] = "LDAPCnx";
 
-struct ldap_cnx {
+struct ldap_cnx
+{
   LDAP *ld;
   ldap_conncb *ldap_callback;
   const char *sasl_mechanism;
@@ -115,7 +116,7 @@ cnx_search (napi_env env, napi_callback_info info)
           return NULL;
         }
 
-      status = napi_unwrap (env, argv[5], (void **)&cookie_wrap);
+      status = napi_unwrap (env, argv[5], (void **) &cookie_wrap);
       assert (status == napi_ok);
       cookie = *cookie_wrap;
     }
@@ -161,7 +162,7 @@ cnx_search (napi_env env, napi_callback_info info)
                                   NULL, 0, &page_control[0]);
     }
 
-  ldap_search_ext (ldap_cnx->ld, base, scope, filter, (char **)attrlist, 0,
+  ldap_search_ext (ldap_cnx->ld, base, scope, filter, (char **) attrlist, 0,
                    page_control, NULL, NULL, 0, &msgid);
   if (pagesize > 0)
     ldap_control_free (page_control[0]);
@@ -188,7 +189,7 @@ cnx_close (napi_env env, napi_callback_info info)
   status = napi_get_cb_info (env, info, &argc, NULL, &this, NULL);
   assert (status == napi_ok);
 
-  status = napi_unwrap (env, this, (void **)&ldap_cnx);
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
   assert (status == napi_ok);
 
   ret = ldap_unbind (ldap_cnx->ld);
@@ -267,7 +268,7 @@ cnx_bind (napi_env env, napi_callback_info info)
 static void
 cnx_finalise (napi_env env, void *data, void *hint)
 {
-  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)data;
+  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) data;
   if (ldap_cnx->ldap_callback) free (ldap_cnx->ldap_callback);
   if (ldap_cnx->handle) free (ldap_cnx->handle);
   free (ldap_cnx);
@@ -570,7 +571,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
   napi_status status;
   bool is_instance;
   size_t argc = 8, size;
-  napi_value argv[argc];
   napi_value this, cnx_cons;
   napi_value url_v, callback, reconnect_callback, disconnect_callback;
   napi_valuetype valuetype;
@@ -583,7 +583,16 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   napi_value connect_str, reconnect_str, disconnect_str;
 
-  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  struct
+  {
+    napi_value callback, reconnect_callback, disconnect_callback;
+    napi_value url, timeout, debug, verifycert, referrals;
+  } args;
+
+  assert (&args.callback == args);
+  memset (args, 0, sizeof (args));
+
+  status = napi_get_cb_info (env, info, &argc, (napi_value *)args, &this, NULL);
   assert (status == napi_ok);
 
   status = napi_get_reference_value (env, cnx_cons_ref, &cnx_cons);
@@ -605,11 +614,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
       napi_throw_error (env, NULL, "This class requires 8 arguments");
       return NULL;
     }
-
-  callback = argv[0];
-  reconnect_callback = argv[1];
-  disconnect_callback = argv[2];
-  url_v = argv[3];
 
   status = napi_typeof (env, callback, &valuetype);
   assert (status == napi_ok);
@@ -709,6 +713,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
                                     &disconnect_str);
   assert (status == napi_ok);
 
+  /*
   status = napi_create_threadsafe_function (env, callback, NULL,
                                             connect_str, 0, 1,
 					    NULL, NULL, this,
@@ -726,7 +731,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
 					    NULL, NULL, NULL, NULL,
 					    &ldap_cnx->disconnect_callback);
   assert (status == napi_ok);
-
+  */
   struct timeval ntimeout = { timeout/1000, (timeout%1000) * 1000 };
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION,  &ver);
@@ -747,7 +752,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   free (url);
 
-  return NULL;
+  return this;
 }
 
 void
