@@ -22,7 +22,9 @@ struct ldap_cnx
   const char *sasl_mechanism;
   uv_poll_t *handle;
   // TODO: memory leak, need to clean these up
-  napi_threadsafe_function reconnect_callback, disconnect_callback, callback;
+  napi_async_context async_context;
+  napi_value reconnect_callback, disconnect_callback, callback;
+  napi_value this;
 };
 
 // shouldn't this be in ldap_cnx?
@@ -508,8 +510,10 @@ cnx_event (uv_poll_t* handle, int _status, int events)
 {
   napi_status status;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
+  /*
   status = napi_call_threadsafe_function (ldap_cnx->callback, handle,
 					  napi_tsfn_blocking);
+  */
   assert (status == napi_ok);
 }
 
@@ -534,9 +538,10 @@ on_connect(LDAP *ld, Sockbuf *sb,
       uv_poll_stop (ldap_cnx->handle);
     }
   uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb)cnx_event);
-
+  /*
   status = napi_call_threadsafe_function (ldap_cnx->reconnect_callback,
 					  NULL, napi_tsfn_blocking);
+  */
   assert (status == napi_ok);
 
   return LDAP_SUCCESS;
@@ -550,8 +555,10 @@ on_disconnect (LDAP *ld, Sockbuf *sb,
   napi_status status;
 
   if (lc->handle) uv_poll_stop (lc->handle);
-  status = napi_call_threadsafe_function(lc->disconnect_callback,
-					 NULL, napi_tsfn_blocking);
+  /*
+  status = napi_call_threadsafe_function (lc->disconnect_callback,
+					  NULL, napi_tsfn_blocking);
+  */
   assert (status == napi_ok);
 }
 
@@ -571,8 +578,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
   napi_status status;
   bool is_instance;
   size_t argc = 8, size;
-  napi_value this, cnx_cons;
-  napi_value url_v, callback, reconnect_callback, disconnect_callback;
+  napi_value this, cnx_cons, resource_name;
   napi_valuetype valuetype;
   int32_t timeout, debug, verifycert, referrals;
   char *url;
@@ -581,18 +587,16 @@ cnx_constructor (napi_env env, napi_callback_info info)
   int zero = 0;
   napi_extended_error_info *errinfo;
 
-  napi_value connect_str, reconnect_str, disconnect_str;
-
   struct
   {
     napi_value callback, reconnect_callback, disconnect_callback;
     napi_value url, timeout, debug, verifycert, referrals;
   } args;
 
-  assert (&args.callback == args);
-  memset (args, 0, sizeof (args));
+  assert ((void *)&args.callback == (void *)&args);
+  memset (&args, 0, sizeof (args));
 
-  status = napi_get_cb_info (env, info, &argc, (napi_value *)args, &this, NULL);
+  status = napi_get_cb_info (env, info, &argc, (napi_value *)&args, &this, NULL);
   assert (status == napi_ok);
 
   status = napi_get_reference_value (env, cnx_cons_ref, &cnx_cons);
@@ -615,7 +619,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  status = napi_typeof (env, callback, &valuetype);
+  status = napi_typeof (env, args.callback, &valuetype);
   assert (status == napi_ok);
   if (valuetype != napi_function)
     {
@@ -623,7 +627,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  status = napi_typeof (env, reconnect_callback, &valuetype);
+  status = napi_typeof (env, args.reconnect_callback, &valuetype);
   assert (status == napi_ok);
   if (valuetype != napi_function)
     {
@@ -631,7 +635,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  status = napi_typeof (env, disconnect_callback, &valuetype);
+  status = napi_typeof (env, args.disconnect_callback, &valuetype);
   assert (status == napi_ok);
   if (valuetype != napi_function)
     {
@@ -652,37 +656,37 @@ cnx_constructor (napi_env env, napi_callback_info info)
   assert (status == napi_ok);
   */
 
-  if (napi_get_value_int32 (env, argv[4], &timeout) != napi_ok)
+  if (napi_get_value_int32 (env, args.timeout, &timeout) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse timeout");
       return NULL;
     }
 
-  if (napi_get_value_int32 (env, argv[5], &debug) != napi_ok)
+  if (napi_get_value_int32 (env, args.debug, &debug) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse debug level");
       return NULL;
     }
 
-  if (napi_get_value_int32 (env, argv[6], &verifycert) != napi_ok)
+  if (napi_get_value_int32 (env, args.verifycert, &verifycert) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse verify cert");
       return NULL;
     }
 
-  if (napi_get_value_int32 (env, argv[7], &referrals) != napi_ok)
+  if (napi_get_value_int32 (env, args.referrals, &referrals) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse referrls");
       return NULL;
     }
 
-  if (napi_get_value_string_utf8 (env, url_v, NULL, 0, &size) != napi_ok)
+  if (napi_get_value_string_utf8 (env, args.url, NULL, 0, &size) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
     }
   url = malloc (++size);
-  if (napi_get_value_string_utf8 (env, url_v, url, size, &size) != napi_ok)
+  if (napi_get_value_string_utf8 (env, args.url, url, size, &size) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
@@ -703,14 +707,8 @@ cnx_constructor (napi_env env, napi_callback_info info)
     }
 
   // NOTE: don't need to use these as everything is in the same thread
-  status = napi_create_string_utf8 (env, "connect", NAPI_AUTO_LENGTH,
-                                    &connect_str);
-  assert (status == napi_ok);
-  status = napi_create_string_utf8 (env, "reconnect", NAPI_AUTO_LENGTH,
-                                    &reconnect_str);
-  assert (status == napi_ok);
-  status = napi_create_string_utf8 (env, "disconnect", NAPI_AUTO_LENGTH,
-                                    &disconnect_str);
+  status = napi_create_string_utf8 (env, "eventloop", NAPI_AUTO_LENGTH,
+                                    &resource_name);
   assert (status == napi_ok);
 
   /*
@@ -740,7 +738,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_NETWORK_TIMEOUT,   &ntimeout);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_REQUIRE_CERT,&verifycert);
   // NOTE: this line segfaults no idea why
-  //ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
 
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_REFERRALS,         &referrals);
