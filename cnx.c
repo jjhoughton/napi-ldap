@@ -23,12 +23,27 @@ struct ldap_cnx
   uv_poll_t *handle;
   // TODO: memory leak, need to clean these up
   napi_async_context async_context;
-  napi_value reconnect_callback, disconnect_callback, callback;
-  napi_value this;
+  //napi_value reconnect_callback, disconnect_callback, callback;
+  //napi_value this;
+  napi_ref reconnect_callback_ref, disconnect_callback_ref, callback_ref;
+  napi_ref this_ref;
+  napi_env env;
 };
 
 // shouldn't this be in ldap_cnx?
 static struct timeval ldap_tv = { 0, 0 };
+
+static inline void
+cnx_errinfo (napi_env env)
+{
+  napi_status status;
+  const napi_extended_error_info *errinfo;
+
+  status = napi_get_last_error_info (env, &errinfo);
+  assert (status == napi_ok);
+
+  puts (errinfo->error_message);
+}
 
 static napi_value
 cnx_search (napi_env env, napi_callback_info info)
@@ -418,21 +433,23 @@ handle_result_events (napi_env env, napi_value js_cb,
   assert (status == napi_ok);
   napi_value argv[] = { errparam, js_message, result_container };
 
-  status = napi_call_function (env, this, js_cb, 3, argv, NULL);
+  status = napi_make_callback (env, ldap_cnx->async_context, this, js_cb,
+                               3, argv, NULL);
   assert (status == napi_ok);
 }
 
 static void
-callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
+cnx_event (uv_poll_t *handle, int _status, int events)
 {
   char *err_str = NULL;
-  uv_poll_t *handle = (uv_poll_t *)data;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
   LDAPMessage *message;
   napi_status status;
-  napi_value errparam, js_message;
-  napi_value this = (napi_value) context;
+  napi_value errparam, js_message, js_cb, this;
   int err, msgtype, res, msgid;
+  napi_env env = ldap_cnx->env;
+  napi_handle_scope scope;
+  napi_value argv[3];
 
   res = ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
                      &ldap_tv, &message);
@@ -442,6 +459,17 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
       ldap_msgfree (message);
       return;
     }
+
+  status = napi_open_handle_scope (env, &scope);
+  assert (status == napi_ok);
+
+  napi_create_int32 (ldap_cnx->env, 4, &(argv[0]));
+
+  status = napi_get_reference_value (env, ldap_cnx->callback_ref, &js_cb);
+  assert (status == napi_ok);
+
+  status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
+  assert (status == napi_ok);
 
   err = ldap_result2error (ldap_cnx->ld, message, 0);
   // TODO: memory leak, might need to free up errparam
@@ -453,7 +481,10 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
       assert (status == napi_ok);
     }
   else
-    errparam = NULL;
+    {
+      status = napi_get_undefined (env, &errparam);
+      assert (status == napi_ok);
+    }
 
   switch (msgtype = ldap_msgtype (message))
     {
@@ -475,8 +506,10 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
 
         status = napi_create_int32 (env, msgid, &js_message);
         assert (status == napi_ok);
-        napi_value argv[] = { errparam, js_message };
-        status = napi_call_function (env, this, js_cb, 3, argv, NULL);
+        argv[0] = errparam;
+        argv[1] = js_message;
+        status = napi_make_callback (env, ldap_cnx->async_context, this,
+                                     js_cb, 2, argv, NULL);
         assert (status == napi_ok);
         break;
       }
@@ -490,9 +523,9 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
                                     &js_message);
         assert (status == napi_ok);
         napi_value argv[] = { errparam, js_message };
-        status = napi_call_function (env, this, js_cb, 2, argv, NULL);
+        status = napi_make_callback (env, ldap_cnx->async_context, this,
+                                     js_cb, 2, argv, NULL);
         assert (status == napi_ok);
-        break;
       }
     default:
       {
@@ -502,19 +535,11 @@ callback_call_js (napi_env env, napi_value js_cb, void *context, void *data)
     }
 
   ldap_msgfree (message);
-  return;
-}
 
-static void
-cnx_event (uv_poll_t* handle, int _status, int events)
-{
-  napi_status status;
-  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
-  /*
-  status = napi_call_threadsafe_function (ldap_cnx->callback, handle,
-					  napi_tsfn_blocking);
-  */
+  status = napi_close_handle_scope (ldap_cnx->env, scope);
   assert (status == napi_ok);
+
+  return;
 }
 
 static int
@@ -525,6 +550,7 @@ on_connect(LDAP *ld, Sockbuf *sb,
   int fd;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)ctx->lc_arg;
   napi_status status;
+  napi_value new, reconnect_callback, this, argv[3];
 
   if (ldap_cnx->handle == NULL)
     {
@@ -538,10 +564,18 @@ on_connect(LDAP *ld, Sockbuf *sb,
       uv_poll_stop (ldap_cnx->handle);
     }
   uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb)cnx_event);
-  /*
-  status = napi_call_threadsafe_function (ldap_cnx->reconnect_callback,
-					  NULL, napi_tsfn_blocking);
-  */
+
+  status = napi_get_reference_value (ldap_cnx->env,
+                                     ldap_cnx->reconnect_callback_ref,
+                                     &reconnect_callback);
+  assert (status == napi_ok);
+  status = napi_get_reference_value (ldap_cnx->env,
+                                     ldap_cnx->this_ref,
+                                     &this);
+  assert (status == napi_ok);
+
+  status = napi_make_callback (ldap_cnx->env, ldap_cnx->async_context, this,
+                               reconnect_callback, 0, NULL, NULL);
   assert (status == napi_ok);
 
   return LDAP_SUCCESS;
@@ -585,7 +619,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
   struct ldap_cnx *ldap_cnx;
   int ver = LDAP_VERSION3;
   int zero = 0;
-  napi_extended_error_info *errinfo;
 
   struct
   {
@@ -699,6 +732,33 @@ cnx_constructor (napi_env env, napi_callback_info info)
   ldap_cnx->ldap_callback->lc_del = on_disconnect;
   ldap_cnx->ldap_callback->lc_arg = ldap_cnx;
 
+  // NOTE: don't need to use these as everything is in the same thread
+  status = napi_create_string_utf8 (env, "eventloop", NAPI_AUTO_LENGTH,
+                                    &resource_name);
+  assert (status == napi_ok);
+  // TODO: destroy this
+  status = napi_async_init (env, NULL, resource_name,
+                            &ldap_cnx->async_context);
+  assert (status == napi_ok);
+
+  ldap_cnx->env = env;
+
+  // TODO: dereference these!!!
+  status = napi_create_reference (env, this, 1, &ldap_cnx->this_ref);
+  assert (status == napi_ok);
+  status = napi_create_reference (env, args.reconnect_callback, 1,
+                                   &ldap_cnx->reconnect_callback_ref);
+  assert (status == napi_ok);
+  status = napi_create_reference (env, args.disconnect_callback, 1,
+                                   &ldap_cnx->disconnect_callback_ref);
+  assert (status == napi_ok);
+  status = napi_create_reference (env, args.callback, 1,
+                                   &ldap_cnx->callback_ref);
+  assert (status == napi_ok);
+
+  status = napi_wrap (env, this, ldap_cnx, cnx_finalise, NULL, NULL);
+  assert (status == napi_ok);
+
   if (ldap_initialize (&(ldap_cnx->ld), url) != LDAP_SUCCESS)
     {
       napi_throw_error (env, NULL, "Error intializing ldap");
@@ -706,30 +766,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  // NOTE: don't need to use these as everything is in the same thread
-  status = napi_create_string_utf8 (env, "eventloop", NAPI_AUTO_LENGTH,
-                                    &resource_name);
-  assert (status == napi_ok);
 
-  /*
-  status = napi_create_threadsafe_function (env, callback, NULL,
-                                            connect_str, 0, 1,
-					    NULL, NULL, this,
-					    callback_call_js,
-					    &ldap_cnx->callback);
-  assert (status == napi_ok);
-
-  status = napi_create_threadsafe_function (env, reconnect_callback,
-					    NULL, reconnect_str, 0, 1,
-					    NULL, NULL, NULL, NULL,
-					    &ldap_cnx->reconnect_callback);
-  assert (status == napi_ok);
-  status = napi_create_threadsafe_function (env, disconnect_callback,
-					    NULL, disconnect_str, 0, 1,
-					    NULL, NULL, NULL, NULL,
-					    &ldap_cnx->disconnect_callback);
-  assert (status == napi_ok);
-  */
   struct timeval ntimeout = { timeout/1000, (timeout%1000) * 1000 };
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION,  &ver);
@@ -738,15 +775,12 @@ cnx_constructor (napi_env env, napi_callback_info info)
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_NETWORK_TIMEOUT,   &ntimeout);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_REQUIRE_CERT,&verifycert);
   // NOTE: this line segfaults no idea why
-  ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
+  //ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
 
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_REFERRALS,         &referrals);
   if (referrals)
     ldap_set_rebind_proc (ldap_cnx->ld, on_rebind, ldap_cnx);
-
-  status = napi_wrap (env, this, ldap_cnx, cnx_finalise, NULL, NULL);
-  assert (status == napi_ok);
 
   free (url);
 
