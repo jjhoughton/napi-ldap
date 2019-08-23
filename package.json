@@ -5,10 +5,6 @@
   "private": true,
   "gypfile": true,
   "scripts": {
-    "start": "node-gyp configure build && node module.js",
-    "test": "node test.js"
-  },
-  "scripts": {
     "configure": "node-gyp configure",
     "build": "node-gyp rebuild",
     "test": "mocha"
