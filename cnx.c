@@ -62,6 +62,27 @@ cnx_log (napi_env env, napi_value value)
 }
 
 static napi_value
+cnx_check_tls (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int is_tls;
+  napi_value this, ret;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, 0, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  is_tls = ldap_tls_inplace (ldap_cnx->ld);
+  status = napi_create_int32 (env, is_tls, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
+static napi_value
 cnx_search (napi_env env, napi_callback_info info)
 {
   napi_status status;
@@ -842,11 +863,12 @@ cnx_init (napi_env env, napi_value exports)
     {
      { "bind", 0, cnx_bind, 0, 0, 0, napi_default, 0 },
      { "search", 0, cnx_search, 0, 0, 0, napi_default, 0 },
-     { "close", 0, cnx_close, 0, 0, 0, napi_default, 0 }
+     { "close", 0, cnx_close, 0, 0, 0, napi_default, 0 },
+     { "checktls", 0, cnx_check_tls, 0, 0, 0, napi_default, 0 }
     };
 
   status = napi_define_class (env, cnx_name, NAPI_AUTO_LENGTH,
-			      cnx_constructor, NULL, 3,
+			      cnx_constructor, NULL, 4,
 			      properties, &cnx_cons);
   assert (status == napi_ok);
 

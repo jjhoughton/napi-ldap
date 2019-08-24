@@ -47,7 +47,7 @@ describe('LDAP', function() {
      done();
      });
      }); */
-    it ('Should show TLS not active', function() {
+    it.only ('Should show TLS not active', function() {
         assert(ldap.tlsactive() === 0);
     });
     it ('Should return specified attrs', function(done) {
