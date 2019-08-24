@@ -59,7 +59,7 @@ describe("LDAP", function() {
   it.only("Should show TLS not active", function() {
     assert(ldap.tlsactive() === 0);
   });
-  it("Should return specified attrs", function(done) {
+  it.only("Should return specified attrs", function(done) {
     ldap.search(
       {
         base: "dc=sample,dc=com",

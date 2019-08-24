@@ -209,6 +209,8 @@ cnx_search (napi_env env, napi_callback_info info)
 
   memset (&page_control, 0, sizeof (page_control));
 
+  buf = attrs;
+
   for (ap = attrlist; (*ap = strsep (&buf, " \t,")) != NULL;)
     if (**ap != '\0')
       if (++ap >= &attrlist[266])
