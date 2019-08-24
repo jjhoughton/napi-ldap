@@ -33,7 +33,7 @@ describe("LDAP", function() {
       done
     );
   });
-  it("Should search", function(done) {
+  it.only("Should search", function(done) {
     ldap.search(
       {
         filter: "(cn=babs)",
