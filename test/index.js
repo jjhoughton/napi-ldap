@@ -8,6 +8,10 @@ var fs = require("fs");
 var ldap;
 var ldap2;
 
+var SegfaultHandler = require("segfault-handler");
+
+SegfaultHandler.registerHandler();
+
 // This shows an inline image for iTerm2
 // should not harm anything otherwise.
 function showImage(what) {
@@ -23,7 +27,7 @@ function showImage(what) {
 }
 
 describe("LDAP", function() {
-  it.only("Should initialize OK", function(done) {
+  it("Should initialize OK", function(done) {
     ldap = new LDAP(
       {
         uri: "ldap://localhost:1234",
@@ -33,7 +37,7 @@ describe("LDAP", function() {
       done
     );
   });
-  it.only("Should search", function(done) {
+  it("Should search", function(done) {
     ldap.search(
       {
         filter: "(cn=babs)",
@@ -56,10 +60,10 @@ describe("LDAP", function() {
      done();
      });
      }); */
-  it.only("Should show TLS not active", function() {
+  it("Should show TLS not active", function() {
     assert(ldap.tlsactive() === 0);
   });
-  it.only("Should return specified attrs", function(done) {
+  it("Should return specified attrs", function(done) {
     ldap.search(
       {
         base: "dc=sample,dc=com",
@@ -76,7 +80,7 @@ describe("LDAP", function() {
       }
     );
   });
-  it.only("Should handle a null result", function(done) {
+  it("Should handle a null result", function(done) {
     ldap.search(
       {
         base: "dc=sample,dc=com",
@@ -90,9 +94,9 @@ describe("LDAP", function() {
       }
     );
   });
-  it.only("Should not delete", function(done) {
+  it("Should not delete", function(done) {
     ldap.delete("cn=Albert,ou=Accounting,dc=sample,dc=com", function(err) {
-      assert.ifError(!err);
+      assert.ifError(err ? null : true);
       done();
     });
   });
@@ -135,7 +139,7 @@ describe("LDAP", function() {
         password: "foobarbax"
       },
       function(err, data) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );
@@ -144,7 +148,7 @@ describe("LDAP", function() {
     ldap.bind(
       { binddn: "cn=Manager,dc=sample,dc=com", password: "xsecret" },
       function(err) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );
@@ -238,7 +242,7 @@ describe("LDAP", function() {
         }
       ],
       function(err, res) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );
@@ -284,7 +288,7 @@ describe("LDAP", function() {
       "cn=Alberto,ou=Accounting,dc=sample,dc=com",
       "cn=Albert",
       function(err) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );

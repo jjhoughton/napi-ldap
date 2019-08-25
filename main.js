@@ -288,13 +288,17 @@ LDAP.prototype.close = function() {
 };
 
 LDAP.prototype.dequeue = function(err, msgid, data) {
-  this.stats.results++;
-  if (this.queue[msgid]) {
-    clearTimeout(this.queue[msgid].timer);
-    this.queue[msgid](err, data);
-    delete this.queue[msgid];
-  } else {
-    this.stats.lateresponses++;
+  try {
+    this.stats.results++;
+    if (this.queue[msgid]) {
+      clearTimeout(this.queue[msgid].timer);
+      this.queue[msgid](err, data);
+      delete this.queue[msgid];
+    } else {
+      this.stats.lateresponses++;
+    }
+  } catch (e) {
+    console.error(e);
   }
 };
 
