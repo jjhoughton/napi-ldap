@@ -64,7 +64,7 @@ describe('LDAP', function() {
             done();
         });
     });
-    it ('Should handle a null result', function(done) {
+    it.only ('Should handle a null result', function(done) {
         ldap.search({
             base:   'dc=sample,dc=com',
             filter: '(cn=wontfindthis)',
@@ -75,7 +75,7 @@ describe('LDAP', function() {
             done();
         });
     });
-    it ('Should not delete', function(done) {
+    it.only ('Should not delete', function(done) {
         ldap.delete('cn=Albert,ou=Accounting,dc=sample,dc=com', function(err) {
             assert.ifError(!err);
             done();
