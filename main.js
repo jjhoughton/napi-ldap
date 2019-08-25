@@ -254,6 +254,7 @@ LDAP.prototype.close = function() {
 };
 
 LDAP.prototype.dequeue = function(err, msgid, data) {
+  try {
     this.stats.results++;
     if (this.queue[msgid]) {
         clearTimeout(this.queue[msgid].timer);
@@ -262,6 +263,9 @@ LDAP.prototype.dequeue = function(err, msgid, data) {
     } else {
         this.stats.lateresponses++;
     }
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 LDAP.prototype.enqueue = function(msgid, fn) {

@@ -8,6 +8,10 @@ var fs = require('fs');
 var ldap;
 var ldap2;
 
+var SegfaultHandler = require('segfault-handler');
+
+SegfaultHandler.registerHandler();
+
 // This shows an inline image for iTerm2
 // should not harm anything otherwise.
 function showImage(what) {
@@ -20,14 +24,14 @@ function showImage(what) {
 }
 
 describe('LDAP', function() {
-    it.only ('Should initialize OK', function(done) {
+    it ('Should initialize OK', function(done) {
         ldap = new LDAP({
             uri: 'ldap://localhost:1234',
             base: 'dc=sample,dc=com',
             attrs: '*'
         }, done);
     });
-    it.only ('Should search', function(done) {
+    it ('Should search', function(done) {
         ldap.search({
             filter: '(cn=babs)',
             scope:  LDAP.SUBTREE
@@ -47,10 +51,10 @@ describe('LDAP', function() {
      done();
      });
      }); */
-    it.only ('Should show TLS not active', function() {
+    it ('Should show TLS not active', function() {
         assert(ldap.tlsactive() === 0);
     });
-    it.only ('Should return specified attrs', function(done) {
+    it ('Should return specified attrs', function(done) {
         ldap.search({
             base: 'dc=sample,dc=com',
             filter: '(cn=albert)',
@@ -64,7 +68,7 @@ describe('LDAP', function() {
             done();
         });
     });
-    it.only ('Should handle a null result', function(done) {
+    it ('Should handle a null result', function(done) {
         ldap.search({
             base:   'dc=sample,dc=com',
             filter: '(cn=wontfindthis)',
@@ -75,9 +79,9 @@ describe('LDAP', function() {
             done();
         });
     });
-    it.only ('Should not delete', function(done) {
+    it ('Should not delete', function(done) {
         ldap.delete('cn=Albert,ou=Accounting,dc=sample,dc=com', function(err) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });
@@ -112,13 +116,13 @@ describe('LDAP', function() {
             attrs:    'cn',
             password: 'foobarbax'
         }, function(err, data) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });    
     it ('Should not bind', function(done) {
         ldap.bind({binddn: 'cn=Manager,dc=sample,dc=com', password: 'xsecret'}, function(err) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });
@@ -196,7 +200,7 @@ describe('LDAP', function() {
                 vals: [ 'e1NIQX01ZW42RzZNZXpScm9UM1hLcWtkUE9tWS9CZlE9' ]
             }
         ], function(err, res) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });
@@ -227,7 +231,7 @@ describe('LDAP', function() {
     });
     it ('Should fail to rename', function(done) {
         ldap.rename('cn=Alberto,ou=Accounting,dc=sample,dc=com', 'cn=Albert', function(err) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });
