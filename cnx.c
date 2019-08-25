@@ -45,6 +45,8 @@ cnx_errinfo (napi_env env)
   puts (errinfo->error_message);
 }
 
+/**
+ * For debugging
 static void
 cnx_log (napi_env env, napi_value value)
 {
@@ -60,6 +62,7 @@ cnx_log (napi_env env, napi_value value)
   status = napi_call_function (env, global, log, 1, argv, NULL);
   assert (status == napi_ok);
 }
+*/
 
 static napi_value
 cnx_check_tls (napi_env env, napi_callback_info info)
@@ -213,7 +216,7 @@ cnx_search (napi_env env, napi_callback_info info)
 
   for (ap = attrlist; (*ap = strsep (&buf, " \t,")) != NULL;)
     if (**ap != '\0')
-      if (++ap >= &attrlist[266])
+      if (++ap >= &attrlist[255])
         break;
 
   if (pagesize > 0)
@@ -329,6 +332,561 @@ cnx_bind (napi_env env, napi_callback_info info)
   return js_ret;
 }
 
+static napi_value
+cnx_delete (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int return_code;
+  size_t size, argc = 1;
+  char *dn;
+  napi_value this, ret, argv[argc];
+  napi_status status;
+  napi_valuetype valuetype;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  if (argc != 1)
+    {
+      napi_throw_error (env, NULL, "This function requires one argument");
+      return NULL;
+    }
+
+  status = napi_typeof (env, *argv, &valuetype);
+  assert (status == napi_ok);  
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "DN needs to be of type string");
+      return NULL;
+    }
+
+  status = napi_get_value_string_utf8 (env, *argv, NULL, 0, &size);
+  assert (status == napi_ok);
+  dn = malloc (++size);
+  status = napi_get_value_string_utf8 (env, *argv, dn, size, &size);
+  assert (status == napi_ok);
+
+  return_code = ldap_delete (ldap_cnx->ld, dn);
+
+  free (dn);
+
+  status = napi_create_int32 (env, return_code, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
+static napi_value
+cnx_add (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  size_t size, argc = 2;
+  char *dn, buf[20], *mod_type, *mod_value;
+  bool is_array;
+  int msgid;
+  uint32_t array_length, vals_length, i, j;
+  napi_value this, argv[argc], attrs, obj, ret = NULL, attr, vals, val;
+  napi_valuetype valuetype;
+  napi_status status;
+  LDAPMod **ldapmods;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  if (argc != 2)
+    {
+      napi_throw_error (env, NULL, "This function requires two arguments");
+      return NULL;
+    }
+
+  status = napi_typeof (env, *argv, &valuetype);
+  assert (status == napi_ok);  
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "DN needs to be of type string");
+      return NULL;
+    }
+
+  attrs = argv[1];
+
+  status = napi_is_array (env, attrs, &is_array);
+  assert (status == napi_ok);
+  if (!is_array)
+    {
+      napi_throw_error (env, NULL, "Attributes should be an array");
+      return NULL;
+    }
+
+  status = napi_get_value_string_utf8 (env, *argv, NULL, 0, &size);
+  assert (status == napi_ok);
+  dn = malloc (++size);
+  status = napi_get_value_string_utf8 (env, *argv, dn, size, &size);
+  assert (status == napi_ok);
+
+  status = napi_get_array_length (env, attrs, &array_length);
+  assert (status == napi_ok);
+
+  size = sizeof (LDAPMod *) * (array_length + 1);
+  ldapmods = (LDAPMod **) malloc (size);
+  memset (ldapmods, 0, size);
+  for (i = 0; i < array_length; i++)
+    {
+      sprintf (buf, "%d", i);
+      status = napi_get_named_property (env, attrs, buf, &obj);
+      assert (status == napi_ok);
+
+      status = napi_typeof (env, obj, &valuetype);
+      assert (status == napi_ok);
+      if (valuetype != napi_object)
+        {
+          napi_throw_error (env, NULL, "Attribute must be an object");
+          goto out;
+        }
+
+      status = napi_get_named_property (env, obj, "attr", &attr);
+      assert (status == napi_ok);
+      status = napi_get_named_property (env, obj, "vals", &vals);
+      assert (status == napi_ok);
+
+      status = napi_typeof (env, attr, &valuetype);
+      assert (status == napi_ok);
+      if (valuetype != napi_string)
+        {
+          napi_throw_error (env, NULL, "attr must be a string");
+          goto out;
+        }
+      status = napi_is_array (env, vals, &is_array);
+      assert (status == napi_ok);
+      if (!is_array)
+        {
+          napi_throw_error (env, NULL, "vals must be an array");
+          goto out;
+        }
+
+      ldapmods[i] = (LDAPMod *) malloc (sizeof (LDAPMod));
+      memset (ldapmods[i], 0, sizeof (LDAPMod));
+
+      ldapmods[i]->mod_op = LDAP_MOD_ADD;
+
+      status = napi_get_value_string_utf8 (env, attr, NULL, 0, &size);
+      assert (status == napi_ok);
+      mod_type = malloc (++size);
+      status = napi_get_value_string_utf8 (env, attr, mod_type, size, &size);
+      assert (status == napi_ok);
+      ldapmods[i]->mod_type = mod_type;
+
+      status = napi_get_array_length (env, vals, &vals_length);
+      assert (status == napi_ok);
+      size = sizeof (char *) * (vals_length + 1);
+      ldapmods[i]->mod_values = malloc (size);
+      memset (ldapmods[i]->mod_values, 0, size);
+      for (j = 0; j < vals_length; j++)
+        {
+          sprintf (buf, "%d", j);
+          status = napi_get_named_property (env, vals, buf, &val);
+          assert (status == napi_ok);
+          status = napi_typeof (env, val, &valuetype);
+          assert (status == napi_ok);
+          if (valuetype != napi_string)
+            {
+              napi_throw_error (env, NULL, "Napi val is not a string");
+              goto out;
+            }
+          status = napi_get_value_string_utf8 (env, val, NULL, 0, &size);
+          assert (status == napi_ok);
+          mod_value = malloc (++size);
+          status = napi_get_value_string_utf8 (env, val, mod_value,
+                                               size, &size);
+          assert (status == napi_ok);
+          ldapmods[i]->mod_values[j] = mod_value;
+        }
+    }
+
+  msgid = ldap_add (ldap_cnx->ld, dn, ldapmods);
+  status = napi_create_int32 (env, msgid, &ret);
+  assert (status == napi_ok);
+  
+ out:
+  free (dn);
+  ldap_mods_free (ldapmods, 1);
+  return ret;
+}
+
+static napi_value
+cnx_modify (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  uint32_t i, j, array_length, vals_length;
+  int msgid;
+  size_t argc = 2, size;
+  bool is_array;
+  napi_value this, argv[argc], ret = NULL, mod_handle;
+  napi_value op, attr, vals, val, attrs;
+  char *dn, *mod_op, *mod_type, buf[20], *mod_value;
+  napi_valuetype valuetype;
+  napi_status status;
+  LDAPMod **ldapmods;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  if (argc != 2)
+    {
+      napi_throw_error (env, NULL, "This function requires two arguments");
+      return NULL;
+    }
+
+  status = napi_typeof (env, argv[0], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_string)
+    {
+      napi_throw_error (env, NULL, "DN needs to be of type string");
+      return NULL;
+    }
+
+  attrs = argv[1];
+
+  status = napi_is_array (env, attrs, &is_array);
+  assert (status == napi_ok);
+  if (!is_array)
+    {
+      napi_throw_error (env, NULL, "Attributes should be an array");
+      return NULL;
+    }
+
+  status = napi_get_value_string_utf8 (env, argv[0], NULL, 0, &size);
+  assert (status == napi_ok);
+  dn = malloc (++size);
+  status = napi_get_value_string_utf8 (env, argv[0], dn, size, &size);
+  assert (status == napi_ok);
+
+  status = napi_get_array_length (env, attrs, &array_length);
+  assert (status == napi_ok);
+
+  size = sizeof (LDAPMod *) * (array_length + 1);
+  ldapmods = (LDAPMod **) malloc (sizeof (LDAPMod *) * (array_length + 1));
+  memset (ldapmods, 0, size);
+  for (i = 0; i < array_length; i++)
+    {
+      sprintf (buf, "%d", i);
+      status = napi_get_named_property (env, attrs, buf, &mod_handle);
+      assert (status == napi_ok);
+
+      status = napi_typeof (env, mod_handle, &valuetype);
+      assert (status == napi_ok);
+      if (valuetype != napi_object)
+        {
+          napi_throw_error (env, NULL, "Attribute must be an object");
+          goto out;
+        }
+
+      status = napi_get_named_property (env, mod_handle, "op", &op);
+      assert (status == napi_ok);
+      status = napi_typeof (env, mod_handle, &valuetype);
+      assert (status == napi_ok);
+      if (valuetype != napi_string)
+        {
+          napi_throw_error (env, NULL, "op must be a string");
+          goto out;
+        }
+
+      status = napi_get_named_property (env, mod_handle, "attr", &attr);
+      assert (status == napi_ok);
+      status = napi_typeof (env, attr, &valuetype);
+      assert (status == napi_ok);
+      if (valuetype != napi_string)
+        {
+          napi_throw_error (env, NULL, "attr must be a string");
+          goto out;
+        }
+
+      status = napi_get_named_property (env, mod_handle, "vals", &vals);
+      assert (status == napi_ok);
+      status = napi_is_array (env, vals, &is_array);
+      assert (status == napi_ok);
+      if (!is_array)
+        {
+          napi_throw_error (env, NULL, "vals must be an array");
+          goto out;
+        }
+
+      status = napi_get_value_string_utf8 (env, op, NULL, 0, &size);
+      assert (status == napi_ok);
+      mod_op = malloc (++size);
+      status = napi_get_value_string_utf8 (env, op, mod_op, size, &size);
+      assert (status == napi_ok);
+
+      if (!strcmp (mod_op, "add"))
+        ldapmods[i]->mod_op = LDAP_MOD_ADD;
+      else if (!strcmp (mod_op, "delete"))
+        ldapmods[i]->mod_op = LDAP_MOD_DELETE;
+      else
+        ldapmods[i]->mod_op = LDAP_MOD_REPLACE;
+
+      free (mod_op);
+
+      status = napi_get_value_string_utf8 (env, attr, NULL, 0, &size);
+      assert (status == napi_ok);
+      mod_type = malloc (++size);
+      status = napi_get_value_string_utf8 (env, attr, mod_type, size, &size);
+      assert (status == napi_ok);
+      ldapmods[i]->mod_type = mod_type;
+
+      status = napi_get_array_length (env, vals, &vals_length);
+      assert (status == napi_ok);
+      size = sizeof (char *) * (vals_length + 1);
+      ldapmods[i]->mod_values = malloc (size);
+      memset (ldapmods[i]->mod_values, 0, size);
+      for (j = 0; j < vals_length; j++)
+        {
+          sprintf (buf, "%d", j);
+          status = napi_get_named_property (env, vals, buf, &val);
+          assert (status == napi_ok);
+          status = napi_typeof (env, val, &valuetype);
+          assert (status == napi_ok);
+          if (valuetype != napi_string)
+            {
+              napi_throw_error (env, NULL, "value must be a string");
+              goto out;
+            }
+          status = napi_get_value_string_utf8 (env, val, NULL, 0, &size);
+          assert (status == napi_ok);
+          mod_value = malloc (++size);
+          status = napi_get_value_string_utf8 (env, val, mod_value,
+                                               size, &size);
+          assert (status == napi_ok);
+          ldapmods[i]->mod_values[j] = mod_value;
+        }
+    }
+
+  msgid = ldap_modify (ldap_cnx->ld, dn, ldapmods);
+  status = napi_create_int32 (env, msgid, &ret);
+  assert (status == napi_ok);
+
+ out:
+  free (dn);
+  ldap_mods_free (ldapmods, 1);
+  return ret;
+}
+
+static napi_value
+cnx_rename (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  char *dn = NULL, *newrdn = NULL;
+  size_t argc = 2, size;
+  int res;
+  napi_value this, argv[argc], ret = NULL;
+  napi_valuetype dn_type, newrdn_type;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  if (argc != 2)
+    {
+      napi_throw_error (env, NULL, "This function requires two arguments");
+      return NULL;
+    }
+
+  status = napi_typeof (env, argv[0], &dn_type);
+  assert (status == napi_ok);
+  if (dn_type != napi_string)
+    {
+      napi_throw_error (env, NULL, "The first argument needs to be a string");
+      return NULL;
+    }
+  status = napi_typeof (env, argv[1], &newrdn_type);
+  assert (status == napi_ok);
+  if (newrdn_type != napi_string)
+    {
+      napi_throw_error (env, NULL, "The second argument needs to be a string");
+      return NULL;
+    }
+
+  status = napi_get_value_string_utf8 (env, argv[0], NULL, 0, &size);
+  assert (status == napi_ok);
+  dn = malloc (++size);
+  status = napi_get_value_string_utf8 (env, argv[0], dn, size, &size);
+  assert (status == napi_ok);
+
+  status = napi_get_value_string_utf8 (env, argv[1], NULL, 0, &size);
+  assert (status == napi_ok);
+  newrdn = malloc (++size);
+  status = napi_get_value_string_utf8 (env, argv[1], newrdn, size, &size);
+  assert (status == napi_ok);
+
+  ldap_rename (ldap_cnx->ld, dn, newrdn, NULL, 1, NULL, NULL, &res);
+
+  status = napi_create_int32 (env, res, &ret);
+  assert (status == napi_ok);
+
+  free (dn);
+  free (newrdn);
+  return ret;
+}
+
+static napi_value
+cnx_abandon (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int msgid;
+  size_t argc = 1, res;
+  napi_value this, argv[argc], ret;
+  napi_valuetype valuetype;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  if (argc != 1)
+    {
+      napi_throw_error (env, NULL, "This function requires one argument");
+      return NULL;
+    }
+
+  status = napi_typeof (env, argv[0], &valuetype);
+  assert (status == napi_ok);
+  if (valuetype != napi_number)
+    {
+      napi_throw_error (env, NULL, "message id needs to be a number");
+      return NULL;
+    }
+
+  status = napi_get_value_int32 (env, argv[0], &msgid);
+  assert (status == napi_ok);
+
+  res = ldap_abandon (ldap_cnx->ld, msgid);
+  status = napi_create_int32 (env, res, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
+static napi_value
+cnx_errorstring (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int err;
+  napi_value this, message;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, 0, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  ldap_get_option (ldap_cnx->ld, LDAP_OPT_RESULT_CODE, &err);
+
+  status = napi_create_string_utf8(env, ldap_err2string (err),
+                                   NAPI_AUTO_LENGTH, &message);
+  assert (status == napi_ok);
+
+  return message;
+}
+
+static napi_value
+cnx_errno (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int err;
+  napi_value this, ret;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, 0, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  ldap_get_option (ldap_cnx->ld, LDAP_OPT_RESULT_CODE, &err);
+
+  status = napi_create_int32 (env, err, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
+static napi_value
+cnx_fd (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  napi_value this, ret;
+  napi_status status;
+  int fd;
+
+  status = napi_get_cb_info (env, info, 0, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  ldap_get_option (ldap_cnx->ld, LDAP_OPT_DESC, &fd);
+
+  status = napi_create_int32 (env, fd, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
+static napi_value
+cnx_install_tls (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int res;
+  napi_value this, ret;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, 0, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  res = ldap_install_tls (ldap_cnx->ld);
+  status = napi_create_int32 (env, res, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
+static napi_value
+cnx_start_tls (napi_env env, napi_callback_info info)
+{
+  struct ldap_cnx *ldap_cnx;
+  int msgid;
+  napi_value this, ret;
+  napi_status status;
+
+  status = napi_get_cb_info (env, info, 0, NULL, &this, NULL);
+  assert (status == napi_ok);
+
+  status = napi_unwrap (env, this, (void **) &ldap_cnx);
+  assert (status == napi_ok);
+
+  ldap_start_tls (ldap_cnx->ld, NULL, NULL, &msgid);
+  status = napi_create_int32 (env, msgid, &ret);
+  assert (status == napi_ok);
+
+  return ret;
+}
+
 static void
 cnx_finalise (napi_env env, void *data, void *hint)
 {
@@ -341,25 +899,25 @@ cnx_finalise (napi_env env, void *data, void *hint)
 static int
 is_binary (char *attrname)
 {
-  return (!strcmp(attrname, "jpegPhoto") ||
-	  !strcmp(attrname, "photo") ||
-	  !strcmp(attrname, "personalSignature") ||
-	  !strcmp(attrname, "userCertificate") ||
-	  !strcmp(attrname, "cACertificate") ||
-	  !strcmp(attrname, "authorityRevocationList") ||
-	  !strcmp(attrname, "certificateRevocationList") ||
-	  !strcmp(attrname, "deltaRevocationList") ||
-	  !strcmp(attrname, "crossCertificatePair") ||
-	  !strcmp(attrname, "x500UniqueIdentifier") ||
-	  !strcmp(attrname, "audio") ||
-	  !strcmp(attrname, "javaSerializedObject") ||
-	  !strcmp(attrname, "thumbnailPhoto") ||
-	  !strcmp(attrname, "thumbnailLogo") ||
-	  !strcmp(attrname, "supportedAlgorithms") ||
-	  !strcmp(attrname, "protocolInformation") ||
-	  !strcmp(attrname, "objectGUID") ||
-	  !strcmp(attrname, "objectSid") ||
-	  strstr(attrname, ";binary"));
+  return (!strcmp (attrname, "jpegPhoto") ||
+	  !strcmp (attrname, "photo") ||
+	  !strcmp (attrname, "personalSignature") ||
+	  !strcmp (attrname, "userCertificate") ||
+	  !strcmp (attrname, "cACertificate") ||
+	  !strcmp (attrname, "authorityRevocationList") ||
+	  !strcmp (attrname, "certificateRevocationList") ||
+	  !strcmp (attrname, "deltaRevocationList") ||
+	  !strcmp (attrname, "crossCertificatePair") ||
+	  !strcmp (attrname, "x500UniqueIdentifier") ||
+	  !strcmp (attrname, "audio") ||
+	  !strcmp (attrname, "javaSerializedObject") ||
+	  !strcmp (attrname, "thumbnailPhoto") ||
+	  !strcmp (attrname, "thumbnailLogo") ||
+	  !strcmp (attrname, "supportedAlgorithms") ||
+	  !strcmp (attrname, "protocolInformation") ||
+	  !strcmp (attrname, "objectGUID") ||
+	  !strcmp (attrname, "objectSid") ||
+	  strstr (attrname, ";binary"));
 }
 
 static napi_value
@@ -371,13 +929,13 @@ handle_result_events (napi_env env, struct ldap_cnx *ldap_cnx,
   LDAPMessage *entry;
   napi_status status;
   napi_value js_result_list, js_result, js_attr_vals, js_val, result_container,
-    js_cookie_wrap, cookie_cons, js_message, argv[3];
+    js_cookie_wrap, cookie_cons;
   char *dn, *attrname;
   BerElement *berptr = NULL;
   char buf[16];
   void *data;
   size_t size;
-  int num_vals, msg_id;
+  int num_vals;
   LDAPControl **server_ctrls;
   struct berval *cookie = NULL, **cookie_wrap = NULL;
 
@@ -485,7 +1043,7 @@ cnx_event (uv_poll_t *handle, int _status, int events)
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
   LDAPMessage *message;
   napi_status status;
-  napi_value errparam, js_message, js_cb, this, result_container, exception;
+  napi_value errparam, js_message, js_cb, this, result_container;
   int err, msgtype, res, msgid;
   napi_env env = ldap_cnx->env;
   napi_handle_scope scope;
@@ -619,7 +1177,7 @@ on_connect(LDAP *ld, Sockbuf *sb,
   int fd;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)ctx->lc_arg;
   napi_status status;
-  napi_value new, reconnect_callback, this, argv[3];
+  napi_value reconnect_callback, this;
 
   if (ldap_cnx->handle == NULL)
     {
@@ -687,7 +1245,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
   char *url;
   struct ldap_cnx *ldap_cnx;
   int ver = LDAP_VERSION3;
-  int zero = 0;
+  //int zero = 0;
 
   struct
   {
@@ -863,14 +1421,24 @@ cnx_init (napi_env env, napi_value exports)
   napi_value cnx_cons;
   napi_property_descriptor properties[] =
     {
-     { "bind", 0, cnx_bind, 0, 0, 0, napi_default, 0 },
      { "search", 0, cnx_search, 0, 0, 0, napi_default, 0 },
+     { "delete", 0, cnx_delete, 0, 0, 0, napi_default, 0 },
+     { "bind", 0, cnx_bind, 0, 0, 0, napi_default, 0 },
+     { "add", 0, cnx_add, 0, 0, 0, napi_default, 0 },
+     { "modify", 0, cnx_modify, 0, 0, 0, napi_default, 0 },
+     { "rename", 0, cnx_rename, 0, 0, 0, napi_default, 0 },
+     { "abandon", 0, cnx_abandon, 0, 0, 0, napi_default, 0 },
+     { "errorstring", 0, cnx_errorstring, 0, 0, 0, napi_default, 0 },
      { "close", 0, cnx_close, 0, 0, 0, napi_default, 0 },
+     { "errno", 0, cnx_errno, 0, 0, 0, napi_default, 0 },
+     { "fd", 0, cnx_fd, 0, 0, 0, napi_default, 0 },
+     { "installtls", 0, cnx_install_tls, 0, 0, 0, napi_default, 0 },
+     { "starttls", 0, cnx_start_tls, 0, 0, 0, napi_default, 0 },
      { "checktls", 0, cnx_check_tls, 0, 0, 0, napi_default, 0 }
     };
 
   status = napi_define_class (env, cnx_name, NAPI_AUTO_LENGTH,
-			      cnx_constructor, NULL, 4,
+			      cnx_constructor, NULL, 14,
 			      properties, &cnx_cons);
   assert (status == napi_ok);
 
