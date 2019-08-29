@@ -8,9 +8,9 @@ var fs = require("fs");
 var ldap;
 var ldap2;
 
-var SegfaultHandler = require("segfault-handler");
+// var SegfaultHandler = require("segfault-handler");
 
-SegfaultHandler.registerHandler();
+// SegfaultHandler.registerHandler("crash.log");
 
 // This shows an inline image for iTerm2
 // should not harm anything otherwise.

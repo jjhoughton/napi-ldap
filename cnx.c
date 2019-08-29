@@ -591,7 +591,7 @@ cnx_modify (napi_env env, napi_callback_info info)
 
       status = napi_get_named_property (env, mod_handle, "op", &op);
       assert (status == napi_ok);
-      status = napi_typeof (env, mod_handle, &valuetype);
+      status = napi_typeof (env, op, &valuetype);
       assert (status == napi_ok);
       if (valuetype != napi_string)
         {
@@ -624,6 +624,9 @@ cnx_modify (napi_env env, napi_callback_info info)
       mod_op = malloc (++size);
       status = napi_get_value_string_utf8 (env, op, mod_op, size, &size);
       assert (status == napi_ok);
+
+      ldapmods[i] = (LDAPMod *) malloc (sizeof (LDAPMod));
+      memset (ldapmods[i], 0, sizeof (LDAPMod));
 
       if (!strcmp (mod_op, "add"))
         ldapmods[i]->mod_op = LDAP_MOD_ADD;
@@ -1212,15 +1215,44 @@ static void
 on_disconnect (LDAP *ld, Sockbuf *sb,
 	       struct ldap_conncb *ctx)
 {
-  struct ldap_cnx *lc = (struct ldap_cnx *)ctx->lc_arg;
+  struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)ctx->lc_arg;
   napi_status status;
 
-  if (lc->handle) uv_poll_stop (lc->handle);
+  if (ldap_cnx->handle) {
+    uv_poll_stop (ldap_cnx->handle);
+  }
+
+  napi_env env = ldap_cnx->env;
+  napi_handle_scope scope;
+  napi_value errparam, js_message, js_cb, this, result_container;
+
+  status = napi_open_handle_scope (env, &scope);
+  assert (status == napi_ok);
+
+  status = napi_get_reference_value (env, ldap_cnx->disconnect_callback_ref, &js_cb);
+  assert (status == napi_ok);
+
+  status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
+  assert (status == napi_ok);
+
+
+        status = napi_make_callback (env, ldap_cnx->async_context, this,
+                                     js_cb, 0, NULL, NULL);
+        assert (status == napi_ok);
+
+
   /*
   status = napi_call_threadsafe_function (lc->disconnect_callback,
 					  NULL, napi_tsfn_blocking);
   */
+  // assert (status == napi_ok);
+
+    status = napi_close_handle_scope (ldap_cnx->env, scope);
   assert (status == napi_ok);
+
+
+
+
 }
 
 static int
