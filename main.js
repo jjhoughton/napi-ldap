@@ -94,7 +94,9 @@ function LDAP(opt, fn) {
                                   this.options.uri.join(' '),
                                   this.options.ntimeout,
                                   this.options.debug,
-                                  this.options.validatecert,
+                                  // Case to int because the c code expects
+                                  // an int.
+                                  +this.options.validatecert,
                                   this.options.referrals);
                                   
     if (typeof fn !== 'function') {

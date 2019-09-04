@@ -1273,11 +1273,10 @@ cnx_constructor (napi_env env, napi_callback_info info)
   size_t argc = 8, size;
   napi_value this, cnx_cons, resource_name;
   napi_valuetype valuetype;
-  int32_t timeout, debug, verifycert, referrals;
+  int32_t timeout, debug, verifycert, referrals, zero = 0;
   char *url;
   struct ldap_cnx *ldap_cnx;
   int ver = LDAP_VERSION3;
-  //int zero = 0;
 
   struct
   {
