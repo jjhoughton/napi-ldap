@@ -52,7 +52,7 @@ describe("LDAP SASL Proxy User", function() {
   after(cleanup);
 });
 
-describe("SASL Error Handling", function() {
+describe.only("SASL Error Handling", function() {
   connect(uri);
 
   it("Should fail to bind invalid password", function(done) {
