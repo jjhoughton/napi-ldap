@@ -1,11 +1,14 @@
 #include <node_api.h>
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <ldap.h>
 #include <uv.h>
+#include "cnx.h"
+
+
+napi_value
+sasl_bind (napi_env env, napi_callback_info info);
 
 extern napi_ref cookie_cons_ref;
 
@@ -15,20 +18,6 @@ static napi_ref cnx_cons_ref;
 
 static const char cnx_name[] = "LDAPCnx";
 
-struct ldap_cnx
-{
-  LDAP *ld;
-  ldap_conncb *ldap_callback;
-  const char *sasl_mechanism;
-  uv_poll_t *handle;
-  // TODO: memory leak, need to clean these up
-  napi_async_context async_context;
-  //napi_value reconnect_callback, disconnect_callback, callback;
-  //napi_value this;
-  napi_ref reconnect_callback_ref, disconnect_callback_ref, callback_ref;
-  napi_ref this_ref;
-  napi_env env;
-};
 
 // shouldn't this be in ldap_cnx?
 static struct timeval ldap_tv = { 0, 0 };
@@ -1466,11 +1455,12 @@ cnx_init (napi_env env, napi_value exports)
      { "fd", 0, cnx_fd, 0, 0, 0, napi_default, 0 },
      { "installtls", 0, cnx_install_tls, 0, 0, 0, napi_default, 0 },
      { "starttls", 0, cnx_start_tls, 0, 0, 0, napi_default, 0 },
-     { "checktls", 0, cnx_check_tls, 0, 0, 0, napi_default, 0 }
+     { "checktls", 0, cnx_check_tls, 0, 0, 0, napi_default, 0 },
+     { "saslbind", 0, sasl_bind, 0, 0, 0, napi_default, 0 }
     };
 
   status = napi_define_class (env, cnx_name, NAPI_AUTO_LENGTH,
-			      cnx_constructor, NULL, 14,
+			      cnx_constructor, NULL, 15,
 			      properties, &cnx_cons);
   assert (status == napi_ok);
 
