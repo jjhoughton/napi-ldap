@@ -1033,7 +1033,7 @@ handle_result_events (napi_env env, struct ldap_cnx *ldap_cnx,
 	  assert (status == napi_ok);
 	  *cookie_wrap = cookie;
 	}
-      ldap_controls_free (server_ctrls);
+     ldap_controls_free (server_ctrls);
     }
 
   return result_container;
@@ -1058,7 +1058,9 @@ cnx_event (uv_poll_t *handle, int _status, int events)
 
   if (res == 0 || res == -1)
     {
-      ldap_msgfree (message);
+
+      // TODO: this causes a segfault in the ldaps tests if uncommented
+      //ldap_msgfree (message);
       return;
     }
 
@@ -1432,8 +1434,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_CONNECT_CB,  ldap_cnx->ldap_callback);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_NETWORK_TIMEOUT,   &ntimeout);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_REQUIRE_CERT,&verifycert);
-  // NOTE: this line segfaults no idea why
-  //ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
+  ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX,      &zero);
 
 
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_REFERRALS,         &referrals);
