@@ -250,7 +250,7 @@ describe("LDAP", function() {
   it("Should survive a slight beating", function(done) {
     this.timeout(5000);
     var count = 0;
-    for (var x = 0; x < 1000; x++) {
+    for (var x = 0; x < 100; x++) {
       ldap.search(
         {
           base: "dc=sample,dc=com",
@@ -259,7 +259,7 @@ describe("LDAP", function() {
         },
         function(err, res) {
           count++;
-          if (count >= 1000) {
+          if (count >= 100) {
             done();
           }
         }

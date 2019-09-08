@@ -7,8 +7,8 @@
 #include "cnx.h"
 
 
-napi_value
-sasl_bind (napi_env env, napi_callback_info info);
+napi_value sasl_bind (napi_env env, napi_callback_info info);
+int sasl_bind_next (LDAPMessage **message, struct ldap_cnx *ldap_cnx);
 
 extern napi_ref cookie_cons_ref;
 
@@ -882,9 +882,25 @@ cnx_start_tls (napi_env env, napi_callback_info info)
 static void
 cnx_finalise (napi_env env, void *data, void *hint)
 {
+  napi_value this;
+  napi_status status;
+
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) data;
+  status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
+  assert (status == napi_ok);
+  status = napi_remove_wrap (env, this, NULL);
+  assert (status == napi_ok);
+  if (ldap_cnx->async_context)
+    napi_async_destroy (env, ldap_cnx->async_context);
   if (ldap_cnx->ldap_callback) free (ldap_cnx->ldap_callback);
   if (ldap_cnx->handle) free (ldap_cnx->handle);
+  if (ldap_cnx->this_ref) napi_delete_reference (env, ldap_cnx->this_ref);
+  if (ldap_cnx->reconnect_callback_ref)
+    napi_delete_reference (env, ldap_cnx->reconnect_callback_ref);
+  if (ldap_cnx->disconnect_callback_ref)
+    napi_delete_reference (env, ldap_cnx->disconnect_callback_ref);
+  if (ldap_cnx->callback_ref)
+    napi_delete_reference (env, ldap_cnx->callback_ref);
   free (ldap_cnx);
 }
 
@@ -1110,11 +1126,17 @@ cnx_event (uv_poll_t *handle, int _status, int events)
     case LDAP_RES_BIND:
       {
         msgid = ldap_msgid (message);
-        //printf ("msgid bind %d\n", msgid);
 
         if (err == LDAP_SASL_BIND_IN_PROGRESS)
           {
-            // TODO: we don't support sasl yet
+            puts ("wat");
+            err = sasl_bind_next (&message, ldap_cnx);
+            if (err != LDAP_SUCCESS)
+              {
+                status = napi_create_error (env, NULL, ldap_err2string(err),
+                                            errparam);
+                assert (status == napi_ok);
+              }
           }
 
         status = napi_create_int64 (env, msgid, &js_message);
@@ -1385,14 +1407,13 @@ cnx_constructor (napi_env env, napi_callback_info info)
   status = napi_create_string_utf8 (env, "eventloop", NAPI_AUTO_LENGTH,
                                     &resource_name);
   assert (status == napi_ok);
-  // TODO: destroy this
+
   status = napi_async_init (env, NULL, resource_name,
                             &ldap_cnx->async_context);
   assert (status == napi_ok);
 
   ldap_cnx->env = env;
 
-  // TODO: dereference these!!!
   status = napi_create_reference (env, this, 1, &ldap_cnx->this_ref);
   assert (status == napi_ok);
   status = napi_create_reference (env, args.reconnect_callback, 1,

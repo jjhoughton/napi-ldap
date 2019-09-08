@@ -85,7 +85,7 @@ describe("LDAP TLS", function() {
         password: "foobarbax"
       },
       function(err, data) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );
