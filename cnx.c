@@ -22,6 +22,8 @@ static const char cnx_name[] = "LDAPCnx";
 // shouldn't this be in ldap_cnx?
 static struct timeval ldap_tv = { 0, 0 };
 
+/**
+ * For debugging
 static inline void
 cnx_errinfo (napi_env env)
 {
@@ -34,8 +36,6 @@ cnx_errinfo (napi_env env)
   puts (errinfo->error_message);
 }
 
-/**
- * For debugging
 static void
 cnx_log (napi_env env, napi_value value)
 {
@@ -196,8 +196,6 @@ cnx_search (napi_env env, napi_callback_info info)
 
   status = napi_get_value_int32 (env, argv[3], &scope);
   assert (status == napi_ok);
-
-  //printf ("pagesize %d\n", pagesize);
 
   memset (&page_control, 0, sizeof (page_control));
 
@@ -1049,7 +1047,7 @@ cnx_event (uv_poll_t *handle, int _status, int events)
 {
   char *err_str = NULL;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) handle->data;
-  LDAPMessage *message;
+  LDAPMessage *message = NULL;
   napi_status status;
   napi_value errparam, js_message, js_cb, this, result_container;
   int err, msgtype, res, msgid;
@@ -1059,13 +1057,10 @@ cnx_event (uv_poll_t *handle, int _status, int events)
 
   res = ldap_result (ldap_cnx->ld, LDAP_RES_ANY, LDAP_MSG_ALL,
                      &ldap_tv, &message);
-  //printf ("event res %x\n", res);
 
   if (res == 0 || res == -1)
     {
-
-      // TODO: this causes a segfault in the ldaps tests if uncommented
-      //ldap_msgfree (message);
+      ldap_msgfree (message);
       return;
     }
 
@@ -1077,8 +1072,6 @@ cnx_event (uv_poll_t *handle, int _status, int events)
 
   status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
   assert (status == napi_ok);
-
-  //printf ("pid %d\n", getpid ());
 
   err = ldap_result2error (ldap_cnx->ld, message, 0);
 
@@ -1105,7 +1098,6 @@ cnx_event (uv_poll_t *handle, int _status, int events)
         result_container = handle_result_events (env, ldap_cnx, message);
         
         msgid = ldap_msgid (message);
-        //printf ("msgid %d\n", msgid);
         status = napi_create_int32 (env, msgid, &js_message);
         assert (status == napi_ok);
         
@@ -1129,12 +1121,13 @@ cnx_event (uv_poll_t *handle, int _status, int events)
 
         if (err == LDAP_SASL_BIND_IN_PROGRESS)
           {
-            puts ("wat");
             err = sasl_bind_next (&message, ldap_cnx);
             if (err != LDAP_SUCCESS)
               {
-                status = napi_create_error (env, NULL, ldap_err2string(err),
-                                            errparam);
+                err_str = ldap_err2string (err);
+                status = napi_create_string_utf8 (env, err_str,
+                                                  NAPI_AUTO_LENGTH,
+                                                  &errparam);
                 assert (status == napi_ok);
               }
           }
@@ -1231,41 +1224,30 @@ on_disconnect (LDAP *ld, Sockbuf *sb,
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *)ctx->lc_arg;
   napi_status status;
 
-  if (ldap_cnx->handle) {
-    uv_poll_stop (ldap_cnx->handle);
-  }
-
   napi_env env = ldap_cnx->env;
   napi_handle_scope scope;
-  napi_value errparam, js_message, js_cb, this, result_container;
+  napi_value js_cb, this;
+
+  if (ldap_cnx->handle) uv_poll_stop (ldap_cnx->handle);
 
   status = napi_open_handle_scope (env, &scope);
   assert (status == napi_ok);
 
-  status = napi_get_reference_value (env, ldap_cnx->disconnect_callback_ref, &js_cb);
+  status = napi_get_reference_value (env, ldap_cnx->disconnect_callback_ref,
+                                     &js_cb);
   assert (status == napi_ok);
 
   status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
   assert (status == napi_ok);
 
 
-        status = napi_make_callback (env, ldap_cnx->async_context, this,
-                                     js_cb, 0, NULL, NULL);
-        assert (status == napi_ok);
-
-
-  /*
-  status = napi_call_threadsafe_function (lc->disconnect_callback,
-					  NULL, napi_tsfn_blocking);
-  */
-  // assert (status == napi_ok);
-
-    status = napi_close_handle_scope (ldap_cnx->env, scope);
+  status = napi_make_callback (env, ldap_cnx->async_context, this,
+                               js_cb, 0, NULL, NULL);
   assert (status == napi_ok);
 
 
-
-
+  status = napi_close_handle_scope (ldap_cnx->env, scope);
+  assert (status == napi_ok);
 }
 
 static int
