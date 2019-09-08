@@ -15,7 +15,7 @@ describe('LDAP TLS', function() {
             base: 'dc=sample,dc=com',
             attrs: '*',
         }, function(err) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });
@@ -61,7 +61,7 @@ describe('LDAP TLS', function() {
             attrs:    'cn',
             password: 'foobarbax'
         }, function(err, data) {
-            assert.ifError(!err);
+            assert.ifError(err ? null : true);
             done();
         });
     });    

@@ -64,7 +64,7 @@ describe("SASL Error Handling", function() {
         securityproperties: "none"
       },
       function(err) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );
@@ -80,7 +80,7 @@ describe("SASL Error Handling", function() {
         securityproperties: "none"
       },
       function(err) {
-        assert.ifError(!err);
+        assert.ifError(err ? null : true);
         done();
       }
     );
