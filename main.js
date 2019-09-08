@@ -318,7 +318,7 @@ LDAP.prototype.enqueue = function(msgid, fn) {
         function fireTimeout(msgid) {
           this.queue[msgid](new LDAPError("Timeout"));
           delete this.queue[msgid];
-          this.ld.abandon(msgid);
+          this.ld.abandon(+msgid);
         }.bind(this)
       );
     }
