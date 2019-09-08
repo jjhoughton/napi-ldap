@@ -14,8 +14,8 @@ struct sasl_defaults
   char* sec_props;
 };
 
-static int sasl_callback(LDAP *ldap_cnx, unsigned flags,
-                         void *_defaults, void *in)
+static int
+sasl_callback(LDAP *ldap_cnx, unsigned flags, void *_defaults, void *in)
 {
   struct sasl_defaults *defaults = (struct sasl_defaults*)_defaults;
   sasl_interact_t *interact = (sasl_interact_t*)in;
@@ -231,7 +231,7 @@ sasl_bind_next (LDAPMessage **message, struct ldap_cnx *ldap_cnx)
 
       ldap_msgfree (*message);
 
-      if(ldap_result (ldap_cnx->ld, msgid, LDAP_MSG_ALL, NULL, message) == -1)
+      if (ldap_result (ldap_cnx->ld, msgid, LDAP_MSG_ALL, NULL, message) == -1)
         {
           ldap_get_option (ldap_cnx->ld, LDAP_OPT_RESULT_CODE, &res);
           break;
