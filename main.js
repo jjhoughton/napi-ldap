@@ -1,4 +1,4 @@
-const binding = require("./build/Debug/napi_ldap");
+const binding = require("bindings")("napi_ldap");
 
 var LDAPError = require("./LDAPError");
 var assert = require("assert");
