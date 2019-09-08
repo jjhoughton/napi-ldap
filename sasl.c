@@ -61,7 +61,6 @@ sasl_bind (napi_env env, napi_callback_info info) {
   napi_valuetype vt;
 
   struct ldap_cnx *ldap_cnx;
-  struct sasl_defaults *defaults = malloc(sizeof(struct sasl_defaults));
 
   status = napi_get_cb_info (env, info, &argc, argv, &this, NULL);
   assert (status == napi_ok);
@@ -80,6 +79,7 @@ sasl_bind (napi_env env, napi_callback_info info) {
   }
 
   size_t size = 0;
+  struct sasl_defaults *defaults = malloc(sizeof(struct sasl_defaults));
 
   status = napi_typeof (env, argv[0], &vt);
   assert (status == napi_ok);
