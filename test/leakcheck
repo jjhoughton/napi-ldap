@@ -7,11 +7,19 @@ var assert = require('assert');
 var ldap;
 var errors = {};;
 
-ldap = new LDAP({
-    uri: 'ldaps://localhost:1235',
-    starttls: false,
-    verifycert: false
-});
+var ldapConfig = {
+  schema: "ldaps://",
+  host: "localhost:1235"
+};
+var uri = ldapConfig.schema + ldapConfig.host;
+
+ldap = new LDAP(
+  {
+    uri: uri,
+    validatecert: LDAP.LDAP_OPT_X_TLS_NEVER
+  }
+);
+
 setInterval(function() {
     ldap.search({
         base:   'dc=sample,dc=com',
@@ -35,4 +43,3 @@ setInterval(function() {
     console.log(errors);
     console.log('');
 }, 10000);
-                       
