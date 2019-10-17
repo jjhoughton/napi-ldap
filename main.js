@@ -79,6 +79,7 @@ function LDAP(opt, fn) {
       ntimeout: 1000,
       timeout: 2000,
       debug: 0,
+      ca: "",
       validatecert: LDAP.LDAP_OPT_X_TLS_HARD,
       referrals: 0,
       connect: function() {},
@@ -101,7 +102,8 @@ function LDAP(opt, fn) {
     // Case to int because the c code expects
     // an int.
     +this.options.validatecert,
-    this.options.referrals
+    this.options.referrals,
+    this.options.ca
   );
 
   if (typeof fn !== "function") {

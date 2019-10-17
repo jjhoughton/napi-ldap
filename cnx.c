@@ -1270,18 +1270,18 @@ cnx_constructor (napi_env env, napi_callback_info info)
 {
   napi_status status;
   bool is_instance;
-  size_t argc = 8, size;
+  size_t argc = 9, size;
   napi_value this, cnx_cons, resource_name;
   napi_valuetype valuetype;
   int32_t timeout, debug, verifycert, referrals, zero = 0;
-  char *url;
+  char *url, *ca = NULL;
   struct ldap_cnx *ldap_cnx;
   int ver = LDAP_VERSION3;
 
   struct
   {
     napi_value callback, reconnect_callback, disconnect_callback;
-    napi_value url, timeout, debug, verifycert, referrals;
+    napi_value url, timeout, debug, verifycert, referrals, ca;
   } args;
 
   assert ((void *) &args.callback == (void *) &args);
@@ -1305,9 +1305,9 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  if (argc != 8)
+  if (argc != 9)
     {
-      napi_throw_error (env, NULL, "This class requires 8 arguments");
+      napi_throw_error (env, NULL, "This class requires 9 arguments");
       return NULL;
     }
 
@@ -1384,6 +1384,26 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
+  size = 0;
+
+  if (napi_get_value_string_utf8 (env, args.ca, NULL, 0, &size) != napi_ok)
+    {
+      napi_throw_error (env, NULL, "Failed to get size of ca");
+      return NULL;
+    }
+
+  if (size > 0)
+    {
+      ca = malloc (++size);
+      if (napi_get_value_string_utf8 (env, args.ca, ca, size, &size) !=
+	  napi_ok)
+	{
+	  free (ca);
+	  napi_throw_error (env, NULL, "Failed to parse ca");
+	  return NULL;
+	}
+    }
+
   ldap_cnx = malloc (sizeof (struct ldap_cnx));
   memset (ldap_cnx, 0, sizeof (struct ldap_cnx));
   ldap_cnx->ldap_callback = malloc (sizeof (struct ldap_conncb));
@@ -1421,12 +1441,16 @@ cnx_constructor (napi_env env, napi_callback_info info)
     {
       napi_throw_error (env, NULL, "Error intializing ldap");
       free (url);
+      if (ca != NULL)
+	free (ca);
       return NULL;
     }
 
 
   struct timeval ntimeout = { timeout / 1000, (timeout % 1000) * 1000 };
 
+  if (ca != NULL)
+    ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_CACERTFILE, ca);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_PROTOCOL_VERSION, &ver);
   ldap_set_option (NULL, LDAP_OPT_DEBUG_LEVEL, &debug);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_CONNECT_CB,
@@ -1435,12 +1459,13 @@ cnx_constructor (napi_env env, napi_callback_info info)
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_REQUIRE_CERT, &verifycert);
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_X_TLS_NEWCTX, &zero);
 
-
   ldap_set_option (ldap_cnx->ld, LDAP_OPT_REFERRALS, &referrals);
   if (referrals)
     ldap_set_rebind_proc (ldap_cnx->ld, on_rebind, ldap_cnx);
 
   free (url);
+  if (ca != NULL)
+    free (ca);
 
   return this;
 }
