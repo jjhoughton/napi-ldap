@@ -13,7 +13,7 @@ var uri = process.env.TEST_SASL_URI || "ldap://localhost:1234";
 
 describe("SASL PLAIN bind", function() {
   connect(uri);
-  it("Should bind with user", function(done) {
+  it.skip("Should bind with user", function(done) {
     ldap.saslbind(
       {
         mechanism: "PLAIN",
@@ -33,7 +33,7 @@ describe("SASL PLAIN bind", function() {
 
 describe("LDAP SASL Proxy User", function() {
   connect(uri);
-  it("Should bind with proxy user", function(done) {
+  it.skip("Should bind with proxy user", function(done) {
     ldap.saslbind(
       {
         mechanism: "PLAIN",

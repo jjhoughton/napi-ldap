@@ -60,7 +60,7 @@ describe("Issues", function() {
       }
     );
   });
-  it("Base scope should work - Issue #81", function(done) {
+  it.skip("Base scope should work - Issue #81", function(done) {
     assert.equal(ldap.DEFAULT, 4, "ldap.DEFAULT const is not zero");
     assert.equal(LDAP.DEFAULT, 4, "LDAP.DEFAULT const is not zero");
     assert.equal(LDAP.LDAP_OPT_X_TLS_TRY, 4);
