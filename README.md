@@ -9,7 +9,7 @@ A rewrite of Jeremy's ldap client using the new official n-api https://github.co
 Contributing
 ===
 
-Any and all patches and pull requests are certainly welcome.
+Any contributions are certainly welcome. Please email your patches to `joshua` dot `houghton` at `yandex` dot `ru`
 
 Thanks to:
 ===
