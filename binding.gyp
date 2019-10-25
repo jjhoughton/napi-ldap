@@ -6,8 +6,8 @@
       "include_dirs": ["/usr/local/include"],
       "libraries": ["-lldap"],
       "defines": ["LDAP_DEPRECATED"],
-      "ldflags": ["-L/usr/local/lib -g"],
-      "cflags": ["-Wall", "-g", "-Wextra"]
+      "ldflags": ["-L/usr/local/lib"],
+      "cflags": ["-Wall", "-Wextra"]
     }
   ]
 }
