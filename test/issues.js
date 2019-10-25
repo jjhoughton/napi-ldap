@@ -35,32 +35,33 @@ describe("Issues", function() {
       function(err, res) {
         assert.ifError(err);
         assert.equal(res.length, 6);
+        ldap.close();
         done();
       }
     );
   });
   it("Connect context should be ldap object - Issue #84", function(done) {
-    ldap = new LDAP(
-      {
-        uri: uri,
-        validatecert: LDAP.LDAP_OPT_X_TLS_NEVER,
-        connect: function() {
-          assert(typeof this.bind === "function");
+    ldap = new LDAP({
+      uri: uri,
+      validatecert: LDAP.LDAP_OPT_X_TLS_NEVER,
+      connect: function() {
+        assert(typeof this.bind === "function");
+        setTimeout(function() {
           ldap.bind(
-            { binddn: "cn=Manager,dc=sample,dc=com", password: "secret" },
+            {
+              binddn: "cn=Manager,dc=sample,dc=com",
+              password: "secret"
+            },
             function(err) {
               assert.ifError(err);
               done();
             }
           );
-        }
-      },
-      function(err) {
-        assert.ifError(err);
+        }, 10);
       }
-    );
+    });
   });
-  it.skip("Base scope should work - Issue #81", function(done) {
+  it("Base scope should work - Issue #81", function(done) {
     assert.equal(ldap.DEFAULT, 4, "ldap.DEFAULT const is not zero");
     assert.equal(LDAP.DEFAULT, 4, "LDAP.DEFAULT const is not zero");
     assert.equal(LDAP.LDAP_OPT_X_TLS_TRY, 4);
