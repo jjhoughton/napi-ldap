@@ -18,6 +18,7 @@ describe("LDAP TLS", function() {
       },
       function(err) {
         assert.ifError(err ? null : true);
+        ldap.close();
         done();
       }
     );
@@ -82,5 +83,6 @@ describe("LDAP TLS", function() {
   });
   it("Should still have TLS", function() {
     assert(ldap.tlsactive());
+    ldap.close();
   });
 });

@@ -40,5 +40,6 @@ describe("Escaping", function() {
   it("Should escape an obvious injection", function() {
     var esc = LDAP.escapefn("filter", "(cn=%s)");
     assert.equal(esc("*)|(password=*)"), "(cn=\\2A\\29|\\28password=\\2A\\29)");
+    ldap.close();
   });
 });

@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "jshint": "^2.8.0",
-    "mocha": "^3.5.3",
+    "mocha": "^6.2.1",
     "nodemon": "^1.19.1",
     "segfault-handler": "^1.3.0"
   },

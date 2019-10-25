@@ -91,6 +91,7 @@ describe("Issues", function() {
               function(err, res) {
                 assert.ifError(err);
                 assert.equal(res.length, 4, "Unexpected number of results");
+                ldap.close();
                 done();
               }
             );
