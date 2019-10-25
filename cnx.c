@@ -1215,6 +1215,9 @@ on_connect (LDAP * ld, Sockbuf * sb,
 				     ldap_cnx->this_ref, &this);
   assert (status == napi_ok);
 
+  // TODO: if you get status == napi_pending_exception then console.erro
+  // TODO: the result of napi_get_and_clear_last_exception (env, &error);
+
   status = napi_make_callback (ldap_cnx->env, ldap_cnx->async_context, this,
 			       reconnect_callback, 0, NULL, NULL);
   assert (status == napi_ok);
