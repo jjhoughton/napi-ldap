@@ -1222,11 +1222,9 @@ on_connect (LDAP * ld, Sockbuf * sb,
 
       status = napi_throw (ldap_cnx->env, exception);
       assert (status == napi_ok);
-
-      return LDAP_SUCCESS;
     }
-
-  assert (status == napi_ok);
+  else
+    assert (status == napi_ok);
 
   return LDAP_SUCCESS;
 }
@@ -1239,7 +1237,13 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
 
   napi_env env = ldap_cnx->env;
   napi_handle_scope scope;
-  napi_value js_cb, this;
+  napi_value js_cb, this, exception;
+
+  // For whatever reason this function seems to get called twice on disconnect.
+  // Therefore we'll assume that if the event looop is not running then this
+  // function has already been called.
+  if (!uv_loop_alive (ldap_cnx->handle->loop))
+    return;
 
   if (ldap_cnx->handle)
     uv_poll_stop (ldap_cnx->handle);
