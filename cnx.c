@@ -1258,11 +1258,18 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
   status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
   assert (status == napi_ok);
 
-
   status = napi_make_callback (env, ldap_cnx->async_context, this,
 			       js_cb, 0, NULL, NULL);
-  assert (status == napi_ok);
+  if (status == napi_pending_exception)
+    {
+      status = napi_get_and_clear_last_exception (ldap_cnx->env, &exception);
+      assert (status == napi_ok);
 
+      status = napi_throw (ldap_cnx->env, exception);
+      assert (status == napi_ok);
+    }
+  else
+    assert (status == napi_ok);
 
   status = napi_close_handle_scope (ldap_cnx->env, scope);
   assert (status == napi_ok);

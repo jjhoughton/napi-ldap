@@ -15,7 +15,6 @@ describe("Check error handling inside c", function() {
     try {
       new LDAP({
         uri: uri,
-        validatecert: LDAP.LDAP_OPT_X_TLS_NEVER,
         connect: function() {
           ldap = this;
           throw new Error("oh no");
@@ -28,5 +27,24 @@ describe("Check error handling inside c", function() {
       ldap.close();
       done();
     }
+  });
+  it("Throw in the disconnect callback", function(done) {
+    new LDAP({
+      uri: uri,
+      connect: function() {
+        setTimeout(() => {
+          try {
+            this.close();
+            done(new Error("This should throw an exception"));
+          } catch (e) {
+            assert.equal(e.message, "oh no :(");
+            done();
+          }
+        }, 1e1);
+      },
+      disconnect: function() {
+        throw new Error("oh no :(");
+      }
+    });
   });
 });
