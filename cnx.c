@@ -1113,8 +1113,6 @@ cnx_event (uv_poll_t * handle, int _status, int events)
 	argv[1] = js_message;
 	argv[2] = result_container;
 
-	//cnx_log (env, result_container);
-
 	// TODO: if you get status == napi_pending_exception then console.erro
 	// TODO: the result of napi_get_and_clear_last_exception (env, &error);
 
@@ -1192,7 +1190,7 @@ on_connect (LDAP * ld, Sockbuf * sb,
   int fd;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) ctx->lc_arg;
   napi_status status;
-  napi_value reconnect_callback, this;
+  napi_value reconnect_callback, this, exception;
 
   if (ldap_cnx->handle == NULL)
     {
@@ -1215,11 +1213,19 @@ on_connect (LDAP * ld, Sockbuf * sb,
 				     ldap_cnx->this_ref, &this);
   assert (status == napi_ok);
 
-  // TODO: if you get status == napi_pending_exception then console.erro
-  // TODO: the result of napi_get_and_clear_last_exception (env, &error);
-
   status = napi_make_callback (ldap_cnx->env, ldap_cnx->async_context, this,
 			       reconnect_callback, 0, NULL, NULL);
+  if (status == napi_pending_exception)
+    {
+      status = napi_get_and_clear_last_exception (ldap_cnx->env, &exception);
+      assert (status == napi_ok);
+
+      status = napi_throw (ldap_cnx->env, exception);
+      assert (status == napi_ok);
+
+      return LDAP_SUCCESS;
+    }
+
   assert (status == napi_ok);
 
   return LDAP_SUCCESS;
