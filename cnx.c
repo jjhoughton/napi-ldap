@@ -53,6 +53,23 @@ cnx_log (napi_env env, napi_value value)
 }
 */
 
+static inline void
+rethrow_on_exception (napi_env env, napi_status status)
+{
+  napi_value exception;
+
+  if (status == napi_pending_exception)
+    {
+      status = napi_get_and_clear_last_exception (env, &exception);
+      assert (status == napi_ok);
+
+      status = napi_throw (env, exception);
+      assert (status == napi_ok);
+    }
+  else
+    assert (status == napi_ok);
+}
+
 static napi_value
 cnx_check_tls (napi_env env, napi_callback_info info)
 {
@@ -1113,12 +1130,9 @@ cnx_event (uv_poll_t * handle, int _status, int events)
 	argv[1] = js_message;
 	argv[2] = result_container;
 
-	// TODO: if you get status == napi_pending_exception then console.erro
-	// TODO: the result of napi_get_and_clear_last_exception (env, &error);
-
 	status = napi_make_callback (env, ldap_cnx->async_context, this,
 				     js_cb, 3, argv, NULL);
-	assert (status == napi_ok);
+	rethrow_on_exception (env, status);
 	break;
       }
     case LDAP_RES_BIND:
@@ -1144,11 +1158,7 @@ cnx_event (uv_poll_t * handle, int _status, int events)
 	argv[1] = js_message;
 	status = napi_make_callback (env, ldap_cnx->async_context, this,
 				     js_cb, 2, argv, NULL);
-	assert (status == napi_ok);
-
-	// TODO: if you get status == napi_pending_exception then console.erro
-	// TODO: the result of napi_get_and_clear_last_exception (env, &error);
-
+	rethrow_on_exception (env, status);
 	break;
       }
     case LDAP_RES_MODIFY:
@@ -1163,11 +1173,7 @@ cnx_event (uv_poll_t * handle, int _status, int events)
 	argv[1] = js_message;
 	status = napi_make_callback (env, ldap_cnx->async_context, this,
 				     js_cb, 2, argv, NULL);
-	assert (status == napi_ok);
-
-	// TODO: if you get status == napi_pending_exception then console.erro
-	// TODO: the result of napi_get_and_clear_last_exception (env, &error);
-
+	rethrow_on_exception (env, status);
 	break;
       }
     default:
@@ -1190,7 +1196,7 @@ on_connect (LDAP * ld, Sockbuf * sb,
   int fd;
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) ctx->lc_arg;
   napi_status status;
-  napi_value reconnect_callback, this, exception;
+  napi_value reconnect_callback, this;
 
   if (ldap_cnx->handle == NULL)
     {
@@ -1215,16 +1221,7 @@ on_connect (LDAP * ld, Sockbuf * sb,
 
   status = napi_make_callback (ldap_cnx->env, ldap_cnx->async_context, this,
 			       reconnect_callback, 0, NULL, NULL);
-  if (status == napi_pending_exception)
-    {
-      status = napi_get_and_clear_last_exception (ldap_cnx->env, &exception);
-      assert (status == napi_ok);
-
-      status = napi_throw (ldap_cnx->env, exception);
-      assert (status == napi_ok);
-    }
-  else
-    assert (status == napi_ok);
+  rethrow_on_exception (ldap_cnx->env, status);
 
   return LDAP_SUCCESS;
 }
@@ -1237,7 +1234,7 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
 
   napi_env env = ldap_cnx->env;
   napi_handle_scope scope;
-  napi_value js_cb, this, exception;
+  napi_value js_cb, this;
 
   // For whatever reason this function seems to get called twice on disconnect.
   // Therefore we'll assume that if the event looop is not running then this
@@ -1260,16 +1257,7 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
 
   status = napi_make_callback (env, ldap_cnx->async_context, this,
 			       js_cb, 0, NULL, NULL);
-  if (status == napi_pending_exception)
-    {
-      status = napi_get_and_clear_last_exception (ldap_cnx->env, &exception);
-      assert (status == napi_ok);
-
-      status = napi_throw (ldap_cnx->env, exception);
-      assert (status == napi_ok);
-    }
-  else
-    assert (status == napi_ok);
+  rethrow_on_exception (env, status);
 
   status = napi_close_handle_scope (ldap_cnx->env, scope);
   assert (status == napi_ok);
