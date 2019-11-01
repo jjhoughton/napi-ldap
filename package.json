@@ -11,9 +11,8 @@
     "indent": "indent *.c *.h"
   },
   "devDependencies": {
-    "jshint": "^2.8.0",
     "mocha": "^6.2.1",
-    "nodemon": "^1.19.1",
+    "prettier": "1.16.4",
     "segfault-handler": "^1.3.0"
   },
   "dependencies": {
