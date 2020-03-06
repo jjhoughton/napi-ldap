@@ -8,7 +8,9 @@
     "configure": "node-gyp configure",
     "build": "node-gyp --debug rebuild",
     "test": "mocha",
-    "indent": "indent *.c *.h"
+    "indent": "indent *.c *.h",
+    "prettier": "prettier --write *.js ./test/*.js",
+    "format": "yarn run prettier && yarn run indent"
   },
   "devDependencies": {
     "mocha": "^6.2.1",
