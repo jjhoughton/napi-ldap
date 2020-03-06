@@ -1343,19 +1343,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
       return NULL;
     }
 
-  /**
-   * I'm gonna need to make threadsafe versions of these function
-   * so this is kind of superflouse
-  status = napi_set_named_property (env, this, "Callback", callback);
-  assert (status == napi_ok);
-  status = napi_set_named_property (env, this,
-				    "ReconnectCallback", reconnect_callback);
-  assert (status == napi_ok);
-  status = npai_set_named_property (env, this,
-				    "DisconnectCallback", disconnect_callback);
-  assert (status == napi_ok);
-  */
-
   if (napi_get_value_int32 (env, args.timeout, &timeout) != napi_ok)
     {
       napi_throw_error (env, NULL, "Failed to parse timeout");
@@ -1472,6 +1459,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
     ldap_set_rebind_proc (ldap_cnx->ld, on_rebind, ldap_cnx);
 
   free (url);
+
   if (ca != NULL)
     free (ca);
 
