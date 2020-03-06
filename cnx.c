@@ -12,8 +12,8 @@ int sasl_bind_next (LDAPMessage ** message, struct ldap_cnx *ldap_cnx);
 
 extern napi_ref cookie_cons_ref;
 
-// NOTE: really not sure about this, it doesn't look like init is called
-// NOTE: mutliple times so i think it's safe.
+// NOTE: This is initialised once only and before main(int argc, char **argv)
+// NOTE: so it should be fine to have it stored in .data.text
 static napi_ref cnx_cons_ref;
 
 static const char cnx_name[] = "LDAPCnx";
@@ -1239,7 +1239,7 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
   // For whatever reason this function seems to get called twice on disconnect.
   // Therefore we'll assume that if the event looop is not running then this
   // function has already been called.
-  if (!uv_loop_alive (ldap_cnx->handle->loop))
+  if (ldap_cnx->handle && !uv_loop_alive (ldap_cnx->handle->loop))
     return;
 
   if (ldap_cnx->handle)
