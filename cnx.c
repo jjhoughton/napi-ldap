@@ -6,7 +6,6 @@
 #include <uv.h>
 #include "cnx.h"
 
-
 napi_value sasl_bind (napi_env env, napi_callback_info info);
 int sasl_bind_next (LDAPMessage ** message, struct ldap_cnx *ldap_cnx);
 
