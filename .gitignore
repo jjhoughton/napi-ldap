@@ -2,3 +2,6 @@ build/
 node_modules
 *~
 test/*.log
+*.patch
+test/slapd.args
+test/slapd.pid
