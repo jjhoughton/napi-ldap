@@ -903,14 +903,7 @@ cnx_start_tls (napi_env env, napi_callback_info info)
 static void
 cnx_finalise (napi_env env, void *data, void *hint)
 {
-  napi_value this;
-  napi_status status;
-
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) data;
-  status = napi_get_reference_value (env, ldap_cnx->this_ref, &this);
-  assert (status == napi_ok);
-  status = napi_remove_wrap (env, this, NULL);
-  assert (status == napi_ok);
   if (ldap_cnx->async_context)
     napi_async_destroy (env, ldap_cnx->async_context);
   if (ldap_cnx->ldap_callback)
