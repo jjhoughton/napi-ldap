@@ -1189,12 +1189,14 @@ on_connect (LDAP * ld, Sockbuf * sb,
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) ctx->lc_arg;
   napi_status status;
   napi_value reconnect_callback, this;
+  uv_loop_t *loop;
 
   if (ldap_cnx->handle == NULL)
     {
       ldap_cnx->handle = malloc (sizeof (uv_poll_t));
       ldap_get_option (ld, LDAP_OPT_DESC, &fd);
-      uv_poll_init (uv_default_loop (), ldap_cnx->handle, fd);
+      status = napi_get_uv_event_loop (ldap_cnx->env, &loop);
+      uv_poll_init (loop, ldap_cnx->handle, fd);
       ldap_cnx->handle->data = ldap_cnx;
     }
   else
@@ -1207,6 +1209,7 @@ on_connect (LDAP * ld, Sockbuf * sb,
 				     ldap_cnx->reconnect_callback_ref,
 				     &reconnect_callback);
   assert (status == napi_ok);
+
   status = napi_get_reference_value (ldap_cnx->env,
 				     ldap_cnx->this_ref, &this);
   assert (status == napi_ok);
