@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "bindings": "^1.5.0",
-    "lodash": "^3.10.1"
+    "lodash": "^4.17.19"
   },
   "engines": {
     "node": ">=8.4.0"
