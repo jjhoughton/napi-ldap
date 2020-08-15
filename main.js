@@ -103,7 +103,7 @@ function LDAP(opt, fn) {
     // an int.
     +this.options.validatecert,
     this.options.referrals,
-    this.options.ca
+    this.options.ca || ""
   );
 
   if (typeof fn !== "function") {

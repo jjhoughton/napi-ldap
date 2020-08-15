@@ -5,3 +5,7 @@ test/*.log
 *.patch
 test/slapd.args
 test/slapd.pid
+deps/openldap-2.4.50.tgz
+deps/openldap-2.4.50/
+deps/openssl-1.1.1g.tar.gz
+deps/openssl-1.1.1g/

@@ -1,0 +1,26 @@
+diff --git a/Makefile.in b/Makefile.in
+index 0dddeca..de2da68 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -13,7 +13,7 @@
+ ## top-level directory of the distribution or, alternatively, at
+ ## <http://www.OpenLDAP.org/license.html>.
+ 
+-SUBDIRS= include libraries clients servers tests doc
++SUBDIRS= include libraries
+ CLEANDIRS=
+ INSTALLDIRS= 
+ 
+diff --git a/libraries/Makefile.in b/libraries/Makefile.in
+index a74f913..3d8ce20 100644
+--- a/libraries/Makefile.in
++++ b/libraries/Makefile.in
+@@ -16,7 +16,4 @@
+ SUBDIRS= \
+ 	liblutil \
+ 	liblber \
+-	liblunicode \
+-	libldap libldap_r \
+-	librewrite
+-
++	libldap
