@@ -1,19 +1,18 @@
 #!/bin/sh
 
-if [[ -z $SLAPD ]] ; then
-  SLAPD=/usr/libexec/openldap
-fi
-
-if [[ -z $SLAPADD ]] ; then
-  SLAPADD=/usr/sbin/slapadd
-fi
-
-if [[ -z $SLAPD_CONF ]] ; then
-  SLAPD_CONF=sasl.conf
-fi
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 MKDIR=/bin/mkdir
 RM=/bin/rm
+KILL=/bin/kill
+SLAPADD=/usr/sbin/slapadd
+
+if [[ "$os" == "darwin" ]]; then
+  SLAPD=/usr/libexec/slapd
+else
+  SLAPD=/usr/sbin/slapd
+fi
+
 
 $RM -rf openldap-data
 $MKDIR openldap-data
@@ -24,7 +23,7 @@ fi
 
 $SLAPADD -f $SLAPD_CONF < startup.ldif
 $SLAPADD -f $SLAPD_CONF < sasl.ldif
-$SLAPD -d999 -f $SLAPD_CONF -hldap://localhost:1234 > sasl.log 2>&1 &
+$SLAPD -d999 -f sasl.$os.conf -hldap://localhost:1234 > sasl.log 2>&1 &
 
 if [[ ! -f slapd.pid ]] ; then
   sleep 1
