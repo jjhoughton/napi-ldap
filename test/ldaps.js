@@ -132,8 +132,7 @@ describe("LDAPS", function() {
         ca: "test/certs/wrongca.crt"
       },
       function(err) {
-        assert(ldap.tlsactive());
-        assert.ifError(err ? null : true);
+        assert.ok(err instanceof Error);
         ldap.close();
         done();
       }

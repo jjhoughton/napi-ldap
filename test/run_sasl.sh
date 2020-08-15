@@ -7,6 +7,10 @@ RM=/bin/rm
 KILL=/bin/kill
 SLAPADD=/usr/sbin/slapadd
 
+if [[ -z $SLAPD_CONF ]] ; then
+  SLAPD_CONF=sasl.$os.conf
+fi
+
 if [[ "$os" == "darwin" ]]; then
   SLAPD=/usr/libexec/slapd
 else

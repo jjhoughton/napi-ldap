@@ -132,7 +132,7 @@ describe("LDAP TLS", function() {
   });
   it("Should not validate cert", function(done) {
     this.timeout(10000);
-    ldap = new LDAP(
+    const ldap = new LDAP(
       {
         uri: "ldap://localhost:1234",
         base: "dc=sample,dc=com",
@@ -145,14 +145,14 @@ describe("LDAP TLS", function() {
         ldap.starttls(function(err) {
           assert.ifError(err);
           ldap.installtls();
-          assert(ldap.tlsactive());
+          assert(ldap.tlsactive() == false);
           ldap.search(
             {
               filter: "(cn=babs)",
               scope: LDAP.SUBTREE
             },
             function(err, res) {
-              assert.ifError(err ? null : true);
+              assert(err instanceof Error);
               ldap.close();
               done();
             }
