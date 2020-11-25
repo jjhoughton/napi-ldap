@@ -2,7 +2,8 @@
   "variables": {
     "BUILD_OPENLDAP%": "<!(echo ${BUILD_OPENLDAP:-0})",
     "NODE_VERSION": "<!(node --version | cut -d. -f1 | cut -dv -f2)",
-    "SASL": "<!(test -f /usr/include/sasl/sasl.h && echo y || echo n)"
+    "SASL": "<!(test -f /usr/include/sasl/sasl.h && echo y || echo n)",
+    "REDHAT_RELEASE": "<!(test ! -e /etc/redhat-release || cat /etc/redhat-release | cut -d' ' -f3 | cut -d'.' -f 1)"
   },
   "targets": [
     {
@@ -27,10 +28,25 @@
 	},
 	{
           "conditions": [[
-            'OS=="linux" and NODE_VERSION > 9', {
-              "libraries": [
-                "../deps/libldap.a", "../deps/liblber.a", "-lresolv"
-              ],
+            'NODE_VERSION > 9', {
+              "conditions": [[
+                'OS=="linux"', {
+		  "conditions": [[
+                    "REDHAT_RELEASE == 6", {
+                      "libraries": [
+		        "../deps/RHEL6/libldap.a", "../deps/RHEL6/liblber.a"
+                      ]
+                    }, {
+                      "libraries": [
+                        "../deps/RHEL7/libldap.a", "../deps/RHEL7/liblber.a"
+                      ]
+                    }
+		  ]]
+                }, {
+                  "libraries": [ "../deps/OSX/libldap.a", "../deps/OSX/liblber.a" ]
+                }
+              ]],
+              "libraries": [ "-lresolv", "-lsasl2" ],
               "include_dirs": [ "deps/include" ]
             }, {
               "libraries": [ "-lldap" ]
@@ -39,7 +55,6 @@
 	}
       ], [
         "SASL==\"y\"", {
-          "libraries": [ "-lsasl2" ],
           "sources": [ "./sasl.c" ]
         }, {
           "sources": [ "./saslx.c" ]
