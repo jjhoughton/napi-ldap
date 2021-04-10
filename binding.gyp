@@ -1,6 +1,7 @@
 {
   "variables": {
     "BUILD_OPENLDAP%": "<!(echo ${BUILD_OPENLDAP:-0})",
+    "USE_SYSTEM_LDAP%": "<!(echo ${USE_SYSTEM_LDAP:-0})",
     "NODE_VERSION": "<!(node --version | cut -d. -f1 | cut -dv -f2)",
     "SASL": "<!(test -f /usr/include/sasl/sasl.h && echo y || echo n)",
     "REDHAT_RELEASE": "<!(test ! -e /etc/redhat-release || cat /etc/redhat-release | cut -d' ' -f3 | cut -d'.' -f 1)"
@@ -29,7 +30,7 @@
 	},
 	{
           "conditions": [[
-            'NODE_VERSION > 9', {
+            'NODE_VERSION > 9 and <(USE_SYSTEM_LDAP)==0', {
               "conditions": [[
                 'OS=="linux"', {
 		  "conditions": [[
