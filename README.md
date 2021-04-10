@@ -1,8 +1,7 @@
-napi-ldap 0.1.0
+napi-ldap 1.0.0
 ===============
 
-OpenLDAP client bindings for Node.js. Requires libraries from
-http://www.openldap.org installed.
+OpenLDAP client bindings for Node.js.
 
 A rewrite of Jeremy's ldap client using the new official n-api https://github.com/jeremycx/node-LDAP
 
@@ -28,13 +27,15 @@ Node >= 8
 Install
 =======
 
-You must ensure you have the latest OpenLDAP client libraries
-installed from http://www.openldap.org
+You do not need OpenLDAP installed unless you are using node8 as this library ships with it's own precompiled version.
 
-You will also require the LDAP Development Libraries (on Ubuntu, `sudo apt-get install libldap2-dev`)
+You will need to ensure the Cyrus SASL libraries are install.
 
-For SASL authentication support the Cyrus SASL libraries need to be installed
-and OpenLDAP needs to be built with SASL support.
+For SASL authentication support the Cyrus SASL devel package needs to also be installed.
+
+If you would like this package to compile its own version of OpenLDAP and link against it upon running yarn then you can do so by specifying `BUILD_OPENLDAP=1 yarn` you will probably need to install libdb-devel for this to work as well as the cyrus-sasl-devel.
+
+Alternatively if you'd like to install OpenLDAP systemwide and link against that then you can do so by specifying `USE_SYSTEM_LDAP=1 yarn`, just be aware that OpenLDAP needs to be compiled against the same version of OpenSSL that node uses. With regards to Centos6 and Centos7 this is not the case. You can see what version of OpenSSL node uses by running `node -e 'console.log(process.versions)'`
 
 Reconnection
 ==========
