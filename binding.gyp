@@ -22,7 +22,8 @@
 	  "libraries": [
 	    "../deps/openldap-2.4.50/libraries/libldap/libldap.a",
 	    "../deps/openldap-2.4.50/libraries/liblber/liblber.a",
-	    "-lresolv"
+	    "-lresolv",
+	    "-lsasl2"
 	  ],
 	  "include_dirs": ["deps/openldap-2.4.50/include"]
 	},

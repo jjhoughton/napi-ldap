@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export CFLAGS="-I$1"
-export LIBRARY_PATH=`pwd`"/openssl-1.1.1g"
+export LIBRARY_PATH=`pwd`"/openssl-1.1.1k"
 unset MAKELEVEL
 unset MFLAGS
 unset MAKEFLAGS
@@ -10,7 +10,7 @@ cd openldap-2.4.50
 patch -p1 < ../exclude_dirs.patch
 echo $CFLAGS
 ./configure
-make VERBOSE=1 -j9
+make VERBOSE=1 -j
 cd libraries/liblber
 ar cru ./liblber.a .libs/assert.o .libs/decode.o .libs/encode.o .libs/io.o .libs/bprint.o .libs/debug.o .libs/memory.o .libs/options.o .libs/sockbuf.o .libs/stdio.o .libs/version.o
 cd ../libldap
