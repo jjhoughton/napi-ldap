@@ -334,6 +334,9 @@ LDAP.prototype.enqueue = function(msgid, fn) {
   }
   fn.timer = setTimeout(
     function searchTimeout() {
+      /* in this instance the connection has already been closed */
+      if (!this.ld) return;
+
       this.ld.abandon(msgid);
       delete this.queue[msgid];
       fn(new LDAPError("Timeout"));
