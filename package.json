@@ -2,7 +2,7 @@
   "name": "napi-ldap",
   "version": "1.0.0",
   "main": "main.js",
-  "private": true,
+  "private": false,
   "gypfile": true,
   "scripts": {
     "configure": "node-gyp configure",
@@ -24,6 +24,6 @@
   "engines": {
     "node": ">=8.4.0"
   },
-  "author": "Joshua Houghton <joshua.houghton@ripjar.com",
+  "author": "Joshua Houghton <joshua.houghton@yandex.ru",
   "license": "MIT"
 }
