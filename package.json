@@ -2,6 +2,20 @@
   "name": "napi-ldap",
   "version": "1.0.0",
   "main": "main.js",
+  "description": "OpenLDAP bindings for node",
+  "homepage": "https://github.com/jjhoughton/napi-ldap",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jjhoughton/napi-ldap.git"
+  },
+  "keywords": [
+    "OpenLDAP",
+    "LDAP",
+    "N-API",
+    "NAPI",
+    "Active Directory",
+    "AD"
+  ],
   "private": false,
   "gypfile": true,
   "scripts": {
@@ -24,6 +38,6 @@
   "engines": {
     "node": ">=8.4.0"
   },
-  "author": "Joshua Houghton <joshua.houghton@yandex.ru",
+  "author": "Joshua Houghton <joshua.houghton@yandex.ru>",
   "license": "MIT"
 }
