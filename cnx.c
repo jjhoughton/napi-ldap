@@ -1370,6 +1370,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
   url = malloc (++size);
   if (napi_get_value_string_utf8 (env, args.url, url, size, &size) != napi_ok)
     {
+      free (url);
       napi_throw_error (env, NULL, "Failed to parse url");
       return NULL;
     }
@@ -1378,6 +1379,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
 
   if (napi_get_value_string_utf8 (env, args.ca, NULL, 0, &size) != napi_ok)
     {
+      free (url);
       napi_throw_error (env, NULL, "Failed to get size of ca");
       return NULL;
     }
@@ -1389,6 +1391,7 @@ cnx_constructor (napi_env env, napi_callback_info info)
 	  napi_ok)
 	{
 	  free (ca);
+	  free (url);
 	  napi_throw_error (env, NULL, "Failed to parse ca");
 	  return NULL;
 	}
