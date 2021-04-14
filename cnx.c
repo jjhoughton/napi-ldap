@@ -264,6 +264,7 @@ cnx_close (napi_env env, napi_callback_info info)
   assert (status == napi_ok);
 
   ret = ldap_unbind (ldap_cnx->ld);
+  ldap_cnx->ld = NULL;
   status = napi_create_int32 (env, ret, &js_ret);
   assert (status == napi_ok);
 
@@ -779,6 +780,9 @@ cnx_abandon (napi_env env, napi_callback_info info)
       napi_throw_error (env, NULL, "message id needs to be a number");
       return NULL;
     }
+
+  if (ldap_cnx->ld == NULL)
+    return NULL;
 
   status = napi_get_value_int32 (env, argv[0], &msgid);
   assert (status == napi_ok);
