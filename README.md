@@ -35,7 +35,7 @@ For SASL authentication support the Cyrus SASL devel package needs to also be in
 
 If you would like this package to compile its own version of OpenLDAP and link against it upon running yarn then you can do so by specifying `BUILD_OPENLDAP=1 yarn` you will probably need to install libdb-devel for this to work as well as the cyrus-sasl-devel.
 
-Alternatively if you'd like to install OpenLDAP systemwide and link against that then you can do so by specifying `USE_SYSTEM_LDAP=1 yarn`, just be aware that OpenLDAP needs to be compiled against the same version of OpenSSL that node uses. With regards to Centos6 and Centos7 this is not the case. You can see what version of OpenSSL node uses by running `node -e 'console.log(process.versions)'`
+Alternatively if you'd like to install OpenLDAP systemwide and link against that then you can do so by specifying `USE_SYSTEM_LDAP=1 yarn`, just be aware that OpenLDAP needs to be compiled against the same version of OpenSSL that node uses. With regards to Centos6 and Centos7 this is not the case. You can see what version of OpenSSL node uses by running `node -e 'console.log(process.versions)'`. You will need to set this opion when running on ARM.
 
 Reconnection
 ==========
@@ -53,7 +53,7 @@ API
 Options are provided as a JS object:
 
 ```js
-var LDAP = require('ldap-client');
+var LDAP = require('napi-ldap');
 
 var ldap = new LDAP({
     uri:             'ldap://server',   // string
@@ -92,7 +92,7 @@ TLS
 TLS can be used via the ldaps:// protocol string in the URI attribute on instantiation. If you want to eschew server certificate checking (if you have a self-signed cserver certificate, for example), you can set the `verifycert` attribute to `LDAP.LDAP_OPT_X_TLS_NEVER`, or one of the following values:
 
 ```js
-var LDAP=require('ldap-client');
+var LDAP=require('napi-ldap');
 
 LDAP.LDAP_OPT_X_TLS_NEVER  = 0;
 LDAP.LDAP_OPT_X_TLS_HARD   = 1;
@@ -166,7 +166,7 @@ If one omits any of the above options, then sensible defaults will be used. One 
 Scopes are specified as one of the following integers:
 
 ```js
-var LDAP=require('ldap-client');
+var LDAP=require('napi-ldap');
 
 LDAP.BASE = 0;
 LDAP.ONELEVEL = 1;
@@ -385,7 +385,7 @@ There are a few helper functions to ensure you are escaping your input properly.
 Returns a function that escapes the provided parameters and inserts them into the provided template:
 
 ```js
-var LDAP = require('ldap-client');
+var LDAP = require('napi-ldap');
 var userSearch = LDAP.escapefn('filter', 
     '(&(objectClass=%s)(cn=%s))');
 
@@ -402,7 +402,7 @@ Since the escaping rules are different for DNs vs search filters, `type` should 
 To escape a single string, `LDAP.stringEscapeFilter`:
 
 ```js
-var LDAP=require('ldap-client');
+var LDAP=require('napi-ldap');
 var user = "John O'Doe";
 
 LDAP.stringEscapeFilter('(username=' + user + ')');
@@ -412,7 +412,7 @@ LDAP.stringEscapeFilter('(username=' + user + ')');
 Note there is no function for string escaping a DN - DN escaping has special rules for escaping the beginning and end of values in the DN, so the best way to safely escape DNs is to use the `escapefn` with a template:
 
 ```js
-var LDAP = require('ldap-client');
+var LDAP = require('napi-ldap');
 var escapeDN = LDAP.escapefn('dn', 
     'cn=%s,dc=sample,dc=com');
 
