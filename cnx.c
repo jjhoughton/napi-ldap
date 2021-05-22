@@ -1203,10 +1203,11 @@ on_connect (LDAP * ld, Sockbuf * sb,
       uv_poll_init (loop, ldap_cnx->handle, fd);
       ldap_cnx->handle->data = ldap_cnx;
     }
-  else
+  else if (uv_loop_alive (ldap_cnx->handle->loop))
     {
       uv_poll_stop (ldap_cnx->handle);
     }
+
   uv_poll_start (ldap_cnx->handle, UV_READABLE, (uv_poll_cb) cnx_event);
 
   status = napi_get_reference_value (ldap_cnx->env,
@@ -1258,7 +1259,7 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
 			       js_cb, 0, NULL, NULL);
   rethrow_on_exception (env, status);
 
-  status = napi_close_handle_scope (ldap_cnx->env, scope);
+  status = napi_close_handle_scope (env, scope);
   assert (status == napi_ok);
 }
 
