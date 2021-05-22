@@ -1,4 +1,4 @@
-napi-ldap 1.0.1
+napi-ldap 1.0.2
 ===============
 
 OpenLDAP client bindings for Node.js.
