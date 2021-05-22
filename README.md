@@ -8,7 +8,7 @@ A rewrite of Jeremy's ldap client using the new official n-api https://github.co
 Contributing
 ===
 
-Any contributions are certainly welcome. Please email your patches to `joshua` dot `houghton` at `yandex` dot `ru`
+Any contributions are certainly welcome. Please email your patches to `joshua` dot `houghton` at `yandex` dot `ru` or submit a pull request on github.
 
 Thanks to:
 ===
@@ -33,7 +33,7 @@ You will need to ensure the Cyrus SASL libraries are install.
 
 For SASL authentication support the Cyrus SASL devel package needs to also be installed.
 
-If you would like this package to compile its own version of OpenLDAP and link against it upon running yarn then you can do so by specifying `BUILD_OPENLDAP=1 yarn` you will probably need to install libdb-devel for this to work as well as the cyrus-sasl-devel.
+If you would like this package to compile its own version of OpenLDAP and link against it upon running yarn then you can do so by specifying `BUILD_OPENLDAP=1 yarn` you will probably need to install libdb-devel for this to work as well as the cyrus-sasl-devel package.
 
 Alternatively if you'd like to install OpenLDAP systemwide and link against that then you can do so by specifying `USE_SYSTEM_LDAP=1 yarn`, just be aware that OpenLDAP needs to be compiled against the same version of OpenSSL that node uses. With regards to Centos6 and Centos7 this is not the case. You can see what version of OpenSSL node uses by running `node -e 'console.log(process.versions)'`. You will need to set this opion when running on ARM.
 
@@ -57,12 +57,15 @@ var LDAP = require('napi-ldap');
 
 var ldap = new LDAP({
     uri:             'ldap://server',   // string
-    validatecert:    false,             // Verify server certificate
-    connecttimeout:  -1,                // seconds, default is -1 (infinite timeout), connect timeout
+    validatecert:    false,             // Verify server certificate, default LDAP.LDAP_OPT_X_TLS_HARD, see TLS section on how to set this up
+    ca:              '/chain.crt',      // full path of the TLS certificate chain, see TLS section
+    timeout:         1000,              // response timeout in milliseconds, default 1000ms
+    ntimeout:        2000,              // network timeout in milliseconds, default 2000ms
     base:            'dc=com',          // default base for all future searches
     attrs:           '*',               // default attribute list for future searches
     filter:          '(objectClass=*)', // default filter for all future searches
     scope:           LDAP.SUBTREE,      // default scope for all future searches
+    debug:           0,                 // set to 1 to see OpenLDAP debug information
     connect:         function(),        // optional function to call when connect/reconnect occurs
     disconnect:      function(),        // optional function to call when disconnect occurs        
 }, function(err) {
@@ -89,7 +92,22 @@ var ldap = new LDAP({
 
 TLS
 ===
-TLS can be used via the ldaps:// protocol string in the URI attribute on instantiation. If you want to eschew server certificate checking (if you have a self-signed cserver certificate, for example), you can set the `verifycert` attribute to `LDAP.LDAP_OPT_X_TLS_NEVER`, or one of the following values:
+TLS can be used via the ldaps:// protocol string in the URI attribute on
+instantiation. Certificate verificate does not work automatically however, I
+believe this is due to node statically linking to OpenSSL although as of
+yet I'm not sure. To turn certificate verification off you can set the
+`verifycert` attribute to `LDAP.LDAP_OPT_X_TLS_NEVER`.
+
+To enable certificate
+verification run the following command to save the certificate chain of
+your ldap server to a file where `ldap.jumpcloud.com` would be the ip/domainname
+of your ldap server.
+
+```
+openssl s_client -showcerts -connect ldap.jumpcloud.com:636 </dev/null 2>/dev/null | sed -ne '/-BEGIN/,/-END/p' > chain.crt
+```
+Next set `validatecert` to `LDAP.LDAP_OPT_X_TLS_HARD` or one of the following
+options bellow and set `ca` to the full path of your certificate chain.
 
 ```js
 var LDAP=require('napi-ldap');
@@ -421,6 +439,18 @@ var safeDN = escapeDN(" O'Doe");
 // => "cn=\ O\'Doe,dc=sample,dc=com"
 
 ```
+
+Running the Tests
+===
+
+On Linux install `openldap-servers`, cd to the `test` directory and run
+`./run_server` in order to run the OpenLDAP server. On another terminal
+in the root directory of this project run `yarn && yarn test`.
+
+On MacOS it's a litte harder to run the tests. I personally ran
+`./run_server` on a Linux box (see above) and port forwarded ports 1234 and 1235
+like so: `ssh -L 1234:localhost:1234 -L 1235:localhost:1235 homeserver`
+and then ran the tests locally on my mac with `yarn test`
 
 Bugs
 ===
