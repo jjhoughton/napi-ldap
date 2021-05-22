@@ -1,3 +1,5 @@
+#define LDAP_DEPRECATED 1
+
 #include <node_api.h>
 #include <assert.h>
 #include <stdio.h>
@@ -159,7 +161,7 @@ cnx_search (napi_env env, napi_callback_info info)
       assert (status == napi_ok);
     }
   else
-    pagesize = 1 << 31;
+    pagesize = 0;
 
 
   status = napi_typeof (env, argv[5], &valuetype);
@@ -210,6 +212,7 @@ cnx_search (napi_env env, napi_callback_info info)
   assert (status == napi_ok);
   attrs = malloc (++size);
   status = napi_get_value_string_utf8 (env, argv[2], attrs, size, &size);
+  assert (status == napi_ok);
 
   status = napi_get_value_int32 (env, argv[3], &scope);
   assert (status == napi_ok);
@@ -446,7 +449,7 @@ cnx_add (napi_env env, napi_callback_info info)
   memset (ldapmods, 0, size);
   for (i = 0; i < array_length; i++)
     {
-      sprintf (buf, "%d", i);
+      sprintf (buf, "%u", i);
       status = napi_get_named_property (env, attrs, buf, &obj);
       assert (status == napi_ok);
 
@@ -497,7 +500,7 @@ cnx_add (napi_env env, napi_callback_info info)
       memset (ldapmods[i]->mod_values, 0, size);
       for (j = 0; j < vals_length; j++)
 	{
-	  sprintf (buf, "%d", j);
+	  sprintf (buf, "%u", j);
 	  status = napi_get_named_property (env, vals, buf, &val);
 	  assert (status == napi_ok);
 	  status = napi_typeof (env, val, &valuetype);
@@ -586,7 +589,7 @@ cnx_modify (napi_env env, napi_callback_info info)
   memset (ldapmods, 0, size);
   for (i = 0; i < array_length; i++)
     {
-      sprintf (buf, "%d", i);
+      sprintf (buf, "%u", i);
       status = napi_get_named_property (env, attrs, buf, &mod_handle);
       assert (status == napi_ok);
 
@@ -660,7 +663,7 @@ cnx_modify (napi_env env, napi_callback_info info)
       memset (ldapmods[i]->mod_values, 0, size);
       for (j = 0; j < vals_length; j++)
 	{
-	  sprintf (buf, "%d", j);
+	  sprintf (buf, "%u", j);
 	  status = napi_get_named_property (env, vals, buf, &val);
 	  assert (status == napi_ok);
 	  status = napi_typeof (env, val, &valuetype);
@@ -1200,6 +1203,7 @@ on_connect (LDAP * ld, Sockbuf * sb,
       ldap_cnx->handle = malloc (sizeof (uv_poll_t));
       ldap_get_option (ld, LDAP_OPT_DESC, &fd);
       status = napi_get_uv_event_loop (ldap_cnx->env, &loop);
+      assert (status == napi_ok);
       uv_poll_init (loop, ldap_cnx->handle, fd);
       ldap_cnx->handle->data = ldap_cnx;
     }
@@ -1292,7 +1296,6 @@ cnx_constructor (napi_env env, napi_callback_info info)
     napi_value url, timeout, debug, verifycert, referrals, ca;
   } args;
 
-  assert ((void *) &args.callback == (void *) &args);
   memset (&args, 0, sizeof (args));
 
   status =
