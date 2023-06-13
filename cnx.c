@@ -1231,6 +1231,11 @@ on_connect (LDAP * ld, Sockbuf * sb,
 }
 
 static void
+on_close (uv_handle_t * handle) {
+  free(handle);
+}
+
+static void
 on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
 {
   struct ldap_cnx *ldap_cnx = (struct ldap_cnx *) ctx->lc_arg;
@@ -1247,7 +1252,11 @@ on_disconnect (LDAP * ld, Sockbuf * sb, struct ldap_conncb *ctx)
     return;
 
   if (ldap_cnx->handle)
-    uv_poll_stop (ldap_cnx->handle);
+    {
+      uv_poll_stop (ldap_cnx->handle);
+      uv_close ((uv_handle_t *) ldap_cnx->handle, on_close);
+      ldap_cnx->handle = NULL;
+    }
 
   status = napi_open_handle_scope (env, &scope);
   assert (status == napi_ok);

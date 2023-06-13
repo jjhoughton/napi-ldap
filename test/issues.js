@@ -5,6 +5,7 @@
 var LDAP = require("../");
 var assert = require("assert");
 var fs = require("fs");
+var child_process = require('child_process');
 var ldap;
 
 var ldapConfig = {
@@ -99,5 +100,52 @@ describe("Issues", function() {
         );
       }
     );
+  });
+  it("should fix jjhoughton/napi-ldap #10", async function() {
+    const port = 12345;
+
+    function start_ldap_server() {
+      return new Promise((resolve, reject) => {
+        const server = child_process.fork(
+          `${__dirname}/mock_ldap_server/mock_ldap_server.js`,
+          [ port, 'dc=sample,dc=com' ]);
+        server.on('message', () => { resolve(server); });
+        server.on('exit', (code) => { reject(new Error(`ldap server exited with code ${code}`)); });
+      });
+    }
+
+    function stop_ldap_server(server, client) {
+      return new Promise((resolve, reject) => {
+        client.options.disconnect = function() { resolve(); };
+        server.kill();
+      });
+    }
+
+    function bind(ldap, options) {
+      return new Promise((resolve, reject) => {
+        ldap.bind(options, (err) => {
+          if (err) { reject(new Error(err)); } else { resolve(); }
+        });
+      });
+    }
+
+    // Start a fake LDAP server that we can terminate to simulate a
+    // connection closing due to idle timeout
+    let server = await start_ldap_server();
+
+    const ldap = new LDAP({ uri: `ldap://127.0.0.1:${port}` });
+
+    await bind(ldap, { binddn: 'cn=manager,dc=sample,dc=com', password: 't3st' });
+
+    // Stop the server then restart it; this closes the active
+    // connection
+    await stop_ldap_server(server, ldap);
+    server = await start_ldap_server();
+
+    // Another bind should reconnect and then succeed
+    await bind(ldap, { binddn: 'cn=manager,dc=sample,dc=com', password: 't3st' });
+
+    // Stop the server to cleanup
+    await stop_ldap_server(server, ldap);
   });
 });
