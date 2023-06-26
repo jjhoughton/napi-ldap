@@ -1232,7 +1232,7 @@ on_connect (LDAP * ld, Sockbuf * sb,
 
 static void
 on_close (uv_handle_t * handle) {
-  free(handle);
+  free (handle);
 }
 
 static void
