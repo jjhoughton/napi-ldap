@@ -1,6 +1,6 @@
 {
   "name": "napi-ldap",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "main.js",
   "description": "OpenLDAP bindings for node",
   "homepage": "https://github.com/jjhoughton/napi-ldap",
