@@ -9,7 +9,7 @@
 	"openssl-1.1.1k.tar.gz"
       ],
       "action": [
-	"curl", "-o", "openssl-1.1.1k.tar.gz", "http://artfiles.org/openssl.org/source/openssl-1.1.1k.tar.gz"
+	"curl", "-o", "openssl-1.1.1k.tar.gz", "https://openssl.org/source/old/1.1.1/openssl-1.1.1k.tar.gz"
       ]
     }, {
       "action_name": "build",
