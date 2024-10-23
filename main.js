@@ -296,6 +296,7 @@ LDAP.prototype.dequeue = function(err, msgid, data) {
     this.stats.results++;
     if (this.queue[msgid]) {
       clearTimeout(this.queue[msgid].timer);
+      if (err) err = new LDAPError(err);
       this.queue[msgid](err, data);
       delete this.queue[msgid];
     } else {
@@ -385,5 +386,7 @@ setConst(LDAP, "LDAP_OPT_X_TLS_HARD", 1);
 setConst(LDAP, "LDAP_OPT_X_TLS_DEMAND", 2);
 setConst(LDAP, "LDAP_OPT_X_TLS_ALLOW", 3);
 setConst(LDAP, "LDAP_OPT_X_TLS_TRY", 4);
+
+LDAP.LDAPError = LDAPError;
 
 module.exports = LDAP;

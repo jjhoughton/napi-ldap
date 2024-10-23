@@ -148,6 +148,7 @@ describe("LDAP", function() {
     ldap.bind(
       { binddn: "cn=Manager,dc=sample,dc=com", password: "xsecret" },
       function(err) {
+        assert(err instanceof LDAP.LDAPError);
         assert.ifError(err ? null : true);
         done();
       }
