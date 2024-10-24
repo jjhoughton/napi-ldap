@@ -1149,6 +1149,11 @@ cnx_event (uv_poll_t * handle, int _status, int events)
 						  &errparam);
 		assert (status == napi_ok);
 	      }
+	    else
+	      {
+	        status = napi_get_undefined (env, &errparam);
+	        assert (status == napi_ok);
+	      }
 	  }
 
 	status = napi_create_int64 (env, msgid, &js_message);
