@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include <ldap.h>
 #include <uv.h>
 #include "cnx.h"
@@ -879,6 +880,12 @@ cnx_install_tls (napi_env env, napi_callback_info info)
   assert (status == napi_ok);
 
   res = ldap_install_tls (ldap_cnx->ld);
+
+  int fd, flags;
+  ldap_get_option (ldap_cnx->ld, LDAP_OPT_DESC, &fd);
+  flags = fcntl (fd, F_GETFL, 0);
+  fcntl (fd, F_SETFL, flags | O_NONBLOCK);
+
   status = napi_create_int32 (env, res, &ret);
   assert (status == napi_ok);
 

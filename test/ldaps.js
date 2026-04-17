@@ -19,6 +19,7 @@ describe("LDAPS", function() {
       function(err) {
         assert.ifError(err ? null : true);
         ldap.close();
+        ldap = null;
         done();
       }
     );
