@@ -15,46 +15,54 @@
       "ldflags": ["-L/usr/local/lib"],
       "cflags": ["-Wall", "-Wextra"],
       "conditions": [[
-	"<(BUILD_OPENLDAP)==1",
-	{
-	  "dependencies": [
-	    "deps/openldap.gyp:openldap"
-	  ],
-	  "libraries": [
-	    "../deps/openldap-2.4.50/libraries/libldap/libldap.a",
-	    "../deps/openldap-2.4.50/libraries/liblber/liblber.a",
-	    "-lresolv",
-	    "-lsasl2"
-	  ],
-	  "include_dirs": ["deps/openldap-2.4.50/include"]
-	},
-	{
+        "<(BUILD_OPENLDAP)==1",
+        {
+          "dependencies": [
+            "deps/openldap.gyp:openldap"
+          ],
+          "libraries": [
+            "../deps/openldap-2.4.50/libraries/libldap/libldap.a",
+            "../deps/openldap-2.4.50/libraries/liblber/liblber.a",
+            "-lresolv",
+            "-lsasl2"
+          ],
+          "include_dirs": ["deps/openldap-2.4.50/include"]
+        },
+        {
           "conditions": [[
-            'NODE_VERSION > 9 and <(USE_SYSTEM_LDAP)==0', {
+            "NODE_VERSION > 9 and <(USE_SYSTEM_LDAP)==0", {
               "conditions": [[
-                'OS=="linux"', {
-		  "conditions": [[
+                "OS==\"linux\"", {
+                  "conditions": [[
                     "REDHAT_RELEASE == 6", {
                       "libraries": [
-		        "../deps/RHEL6/libldap.a", "../deps/RHEL6/liblber.a"
+                        "../deps/RHEL6/libldap.a", "../deps/RHEL6/liblber.a", "-lsasl2"
                       ]
                     }, {
-                      "libraries": [
-                        "../deps/RHEL7/libldap.a", "../deps/RHEL7/liblber.a"
-                      ]
+                      "conditions": [[
+                        "REDHAT_RELEASE == 7", {
+                          "libraries": [
+                            "../deps/RHEL7/libldap.a", "../deps/RHEL7/liblber.a", "-lsasl2"
+                          ]
+                        }, {
+                          "libraries": [
+                            "../deps/RHEL8/libldap.a", "../deps/RHEL8/liblber.a", "../deps/RHEL8/libsasl2.a"
+                          ]
+                        }
+                      ]]
                     }
-		  ]]
+                  ]]
                 }, {
                   "libraries": [ "../deps/OSX/libldap.a", "../deps/OSX/liblber.a" ]
                 }
               ]],
-              "libraries": [ "-lresolv", "-lsasl2" ],
+              "libraries": [ "-lresolv" ],
               "include_dirs": [ "deps/include" ]
             }, {
               "libraries": [ "-lldap" ]
             }
           ]]
-	}
+        }
       ], [
         "SASL==\"y\"", {
           "sources": [ "./sasl.c" ]
@@ -74,8 +82,8 @@
           ]
         },
         "xcode_settings": {
-          'OTHER_LDFLAGS': [
-            '-L/usr/local/lib'
+          "OTHER_LDFLAGS": [
+            "-L/usr/local/lib"
           ]
         }
       }

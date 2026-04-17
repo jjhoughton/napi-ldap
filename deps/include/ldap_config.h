@@ -1,8 +1,8 @@
-/* Generated from ./ldap_config.hin on Sat 15 Aug 09:57:32 UTC 2020 */
+/* Generated from ./ldap_config.hin on Fri Apr 17 08:04:44 UTC 2026 */
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2026 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -15,7 +15,7 @@
  */
 
 /*
- * This file works in confunction with OpenLDAP configure system.
+ * This file works in conjunction with OpenLDAP configure system.
  * If you do no like the values below, adjust your configure options.
  */
 
