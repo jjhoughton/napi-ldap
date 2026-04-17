@@ -185,7 +185,18 @@ LDAP.prototype.saslbind = function(opt, fn) {
     throw new LDAPError("Invalid argument");
   }
 
-  return this.enqueue(this.ld.saslbind.apply(this.ld, args), fn);
+  var msgid;
+  try {
+    msgid = this.ld.saslbind.apply(this.ld, args);
+  } catch (e) {
+    if (e.message === "Can't contact LDAP server") {
+      process.nextTick(function() { fn(new LDAPError(e.message)); });
+      this.stats.errors++;
+      return this;
+    }
+    throw e;
+  }
+  return this.enqueue(msgid, fn);
 };
 
 LDAP.prototype.add = function(dn, attrs, fn) {
